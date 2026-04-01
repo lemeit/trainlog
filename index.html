@@ -436,7 +436,7 @@ function VidBtn({url}){
 }
 
 // ── HEADER ───────────────────────────────────────────────────
-var TAB_NAMES = {dashboard:"Inicio",cal:"Calendario",log:"Registrar",history:"Historial",ai:"Asistente IA",settings:"Configuración"};
+var TAB_NAMES = {dashboard:"Inicio",cal:"Calendario",log:"Registrar",history:"Historial",charts:"Gráficos",ai:"Asistente IA",settings:"Configuración"};
 function Header({profile,tab}){
   return <div style={{padding:"16px 16px 12px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:C.bg,zIndex:50}}>
     <div>
@@ -451,7 +451,7 @@ function Header({profile,tab}){
 }
 
 // ── NAV ──────────────────────────────────────────────────────
-var NAV = [{id:"dashboard",icon:"⚡",label:"Inicio"},{id:"cal",icon:"📅",label:"Cal."},{id:"log",icon:"＋",label:"Reg."},{id:"history",icon:"📊",label:"Historial"},{id:"ai",icon:"🤖",label:"IA"},{id:"settings",icon:"⚙️",label:"Config."}];
+var NAV = [{id:"dashboard",icon:"⚡",label:"Inicio"},{id:"cal",icon:"📅",label:"Cal."},{id:"log",icon:"＋",label:"Reg."},{id:"history",icon:"📊",label:"Historial"},{id:"charts",icon:"📈",label:"Gráficos"},{id:"ai",icon:"🤖",label:"IA"},{id:"settings",icon:"⚙️",label:"Config."}];
 function Nav({tab,set}){
   return <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid "+C.border,display:"flex",zIndex:100}}>
     {NAV.map(function(n){
@@ -1076,7 +1076,7 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
     }).join("\n");
     return "ATLETA: "+perfil+"\nRUTINAS: "+ruts+"\nHISTORIAL:\n"+(hist||"Sin datos aún");
   }
-  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES, no validar lo que el atleta ya decidió. Cuando algo no es óptimo, decílo. Cuando el atleta está en lo correcto, decílo con fundamento, no por quedar bien. Si no tenés datos suficientes para responder algo, decílo en vez de inventar. Evitá frases condescendientes como “me alegra escucharte”, “excelente decisión”, “entiendo perfectamente”. Irónico cuando corresponde. Datos clave del atleta: 45 años, 80kg, 170cm, ciático diagnosticado (episodios ocasionales), actualmente en fase gym (4 días/semana), objetivo pasar a natación en mayo. IMC 27.7 — sobrepeso leve, relevante para carga articular. Riesgo principal: lesión lumbar por técnica incorrecta en gym, no la natación (que es de bajo impacto). Cuando analices progreso: buscá patrones reales en los datos (energía, dolor ciático, días de semana, grupos musculares). Si los datos son insuficientes, decílo y sugerí qué registrar para poder analizar mejor. Respuestas cortas y concretas. Máximo 4 párrafos salvo que el atleta pida detalle.\n\n"+ctx();
+  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES basadas ÚNICAMENTE en los datos del historial que se te pasa. Cuando algo no es óptimo, decílo. Cuando el atleta está en lo correcto, decílo con fundamento. Evitá frases condescendientes. Irónico cuando corresponde. Datos clave del atleta: 45 años, 80kg, 170cm, ciático diagnosticado (episodios ocasionales), gym 4 días/semana, objetivo natación en mayo. IMC 27.7 — sobrepeso leve. REGLA CRÍTICA ANTI-ALUCINACIÓN: SOLO podés afirmar datos que estén EXPLÍCITAMENTE en el HISTORIAL que figura abajo. Si el atleta pregunta por datos que NO están en el historial (sueño, HRV, SpO2, eficiencia de sueño, fases de sueño, o cualquier métrica no listada), respondé SIEMPRE: No tengo esos datos en tu historial. Para analizarlos necesitás importarlos desde Garmin Connect. NUNCA inventes fechas, números, porcentajes ni métricas específicas que no estén en el contexto. Si no está en el historial, no existe para vos. Respuestas cortas y concretas. Máximo 4 párrafos salvo que el atleta pida detalle.\n\n"+ctx();
   function send(){
     if(!inp.trim()||load) return;
     if(!apiKey){alert("Ingresá tu Groq API Key en ⚙️ Configuración");return;}
@@ -1123,6 +1123,231 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
       <input value={inp} onChange={function(e){setInp(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey)send();}} style={{...st.inp,flex:1}} placeholder="Preguuntá sobre tu progreso..." disabled={load}/>
       <button onClick={send} disabled={load||!inp.trim()} style={{...st.ghost,padding:"10px 16px",fontSize:16,opacity:load||!inp.trim()?0.4:1}}>→</button>
     </div>
+  </div>;
+}
+
+// ── CHARTS ───────────────────────────────────────────────────
+function MiniBar({values,color,maxVal,height}){
+  var max = maxVal||Math.max.apply(null,values.map(function(v){return v.val||0;}))||1;
+  return <div style={{display:"flex",alignItems:"flex-end",gap:3,height:height||60}}>
+    {values.map(function(v,i){
+      var pct = max>0?(v.val||0)/max:0;
+      return <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+        <div style={{width:"100%",background:pct>0?color:C.border,borderRadius:"3px 3px 0 0",height:Math.max(pct*(height||60),pct>0?3:0),transition:"height 0.3s"}}/>
+        <div style={{fontSize:7,color:C.muted,fontWeight:600,textAlign:"center",lineHeight:1}}>{v.label}</div>
+      </div>;
+    })}
+  </div>;
+}
+function MiniLine({values,color,height}){
+  var max = Math.max.apply(null,values.map(function(v){return v.val||0;}))||1;
+  var min = Math.min.apply(null,values.filter(function(v){return v.val>0;}).map(function(v){return v.val;}))||0;
+  var range = max-min||1;
+  var w=280, h=height||60, pad=4;
+  var pts = values.map(function(v,i){
+    var x = pad + (i/(values.length-1||1))*(w-pad*2);
+    var y = v.val>0 ? h-pad - ((v.val-min)/range)*(h-pad*2) : h-pad;
+    return {x:x,y:y,val:v.val,label:v.label};
+  });
+  var path = pts.filter(function(p){return p.val>0;}).map(function(p,i){return (i===0?"M":"L")+p.x+","+p.y;}).join(" ");
+  return <div style={{overflowX:"auto"}}>
+    <svg width={w} height={h+20} style={{display:"block"}}>
+      {pts.filter(function(p){return p.val>0;}).map(function(p,i){
+        return <circle key={i} cx={p.x} cy={p.y} r={3} fill={color}/>;
+      })}
+      {path&&<path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round"/>}
+      {pts.map(function(p,i){
+        return <text key={i} x={p.x} y={h+14} textAnchor="middle" fontSize={7} fill={C.muted}>{p.label}</text>;
+      })}
+    </svg>
+  </div>;
+}
+
+function Charts({logs}){
+  var [period,setPeriod] = useState("30");
+  var days = parseInt(period);
+  var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-days);
+  var filtered = logs.filter(function(l){
+    return new Date(l.date+"T12:00:00")>=cutoff && l.type!=="config";
+  });
+
+  // ── Agrupar por semana ────────────────────────────────────
+  function weekKey(dateStr){
+    var d = new Date(dateStr+"T12:00:00");
+    var day = d.getDay(); // 0=dom
+    var diff = d.getDate() - day + (day===0?-6:1);
+    var mon = new Date(d); mon.setDate(diff);
+    return mon.toISOString().slice(0,10);
+  }
+  function weekLabel(iso){
+    var d = new Date(iso+"T12:00:00");
+    return pad2(d.getDate())+"/"+pad2(d.getMonth()+1);
+  }
+
+  // Semanas únicas ordenadas
+  var weeksSet = {};
+  filtered.forEach(function(l){ weeksSet[weekKey(l.date)]=true; });
+  var weeks = Object.keys(weeksSet).sort();
+
+  // ── Calorías por semana ───────────────────────────────────
+  var calByWeek = {};
+  weeks.forEach(function(w){ calByWeek[w]={gym:0,cardio:0}; });
+  filtered.forEach(function(l){
+    if(!l.calories) return;
+    var w = weekKey(l.date);
+    if(!calByWeek[w]) calByWeek[w]={gym:0,cardio:0};
+    if(l.type==="gym") calByWeek[w].gym+=l.calories;
+    else calByWeek[w].cardio+=l.calories;
+  });
+
+  // ── FC media por sesión (solo Garmin) ────────────────────
+  var hrData = filtered.filter(function(l){return l.hrAvg&&l.hrAvg>0;})
+    .slice(-15)
+    .map(function(l){return {val:l.hrAvg,label:l.date.slice(5).replace("-","/"),label2:l.label};});
+
+  // ── Body Battery drop por sesión ─────────────────────────
+  var bbData = filtered.filter(function(l){return l.bodyBatDrop&&l.bodyBatDrop<0;})
+    .slice(-15)
+    .map(function(l){return {val:Math.abs(l.bodyBatDrop),label:l.date.slice(5).replace("-","/"),tipo:l.label};});
+
+  // ── Duración semanal total ────────────────────────────────
+  var durByWeek = {};
+  weeks.forEach(function(w){ durByWeek[w]=0; });
+  filtered.forEach(function(l){
+    if(!l.duration) return;
+    var w = weekKey(l.date);
+    if(!durByWeek[w]) durByWeek[w]=0;
+    durByWeek[w]+=l.duration;
+  });
+
+  // ── Distribución de tipos ─────────────────────────────────
+  var typeCounts = {gym:0,swimming:0,activity:0,home:0};
+  filtered.forEach(function(l){ typeCounts[l.type]=(typeCounts[l.type]||0)+1; });
+  var totalActs = filtered.length||1;
+
+  // ── Stats resumen ─────────────────────────────────────────
+  var totalCal = filtered.reduce(function(s,l){return s+(l.calories||0);},0);
+  var avgHr = hrData.length?Math.round(hrData.reduce(function(s,v){return s+v.val;},0)/hrData.length):null;
+  var totalDur = filtered.reduce(function(s,l){return s+(l.duration||0);},0);
+  var maxBBdrop = bbData.length?Math.max.apply(null,bbData.map(function(v){return v.val;})):null;
+
+  var PERIOD_OPTS = [["7","7 días"],["30","30 días"],["90","3 meses"]];
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,fontWeight:700}}>ESTADÍSTICAS</div>
+      <div style={{display:"flex",gap:4}}>
+        {PERIOD_OPTS.map(function(o){
+          return <button key={o[0]} onClick={function(){setPeriod(o[0]);}} style={{background:period===o[0]?C.accent:C.card,color:period===o[0]?"#fff":C.muted,border:"1px solid "+(period===o[0]?C.accent:C.border),borderRadius:6,padding:"4px 10px",fontSize:10,cursor:"pointer",fontWeight:700}}>{o[1]}</button>;
+        })}
+      </div>
+    </div>
+
+    {/* Resumen numérico */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+      {[
+        {v:filtered.length,u:"actividades",color:C.accent},
+        {v:totalDur?Math.round(totalDur/60)+"h "+totalDur%60+"m":"--",u:"tiempo total",color:C.blue},
+        {v:totalCal?totalCal.toLocaleString()+" kcal":"--",u:"calorías",color:C.orange},
+        {v:avgHr?avgHr+" bpm":"--",u:"FC media",color:C.danger},
+      ].map(function(x,i){
+        return <div key={i} style={{...st.card,textAlign:"center",padding:"12px 8px",marginBottom:0}}>
+          <div style={{color:x.color,fontSize:20,fontWeight:800,lineHeight:1}}>{x.v}</div>
+          <div style={{color:C.muted,fontSize:9,marginTop:4,fontWeight:700}}>{x.u}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* Distribución de actividades */}
+    <div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:12,fontWeight:700}}>TIPO DE ACTIVIDADES</div>
+      {[
+        {key:"gym",label:"Gym / Fuerza",color:C.green},
+        {key:"activity",label:"Cardio / Cinta / Bici",color:C.blue},
+        {key:"swimming",label:"Natación",color:C.purple},
+        {key:"home",label:"Casa / Bandas",color:C.orange},
+      ].map(function(t){
+        var cnt = typeCounts[t.key]||0;
+        var pct = Math.round(cnt/totalActs*100);
+        if(!cnt) return null;
+        return <div key={t.key} style={{marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+            <span style={{fontSize:11,fontWeight:600}}>{t.label}</span>
+            <span style={{fontSize:11,color:C.muted}}>{cnt} ({pct}%)</span>
+          </div>
+          <div style={{background:C.border,borderRadius:4,height:6}}>
+            <div style={{background:t.color,borderRadius:4,height:6,width:pct+"%",transition:"width 0.4s"}}/>
+          </div>
+        </div>;
+      })}
+    </div>
+
+    {/* Calorías por semana */}
+    {weeks.length>0&&Object.values(calByWeek).some(function(w){return w.gym+w.cardio>0;})&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:12,fontWeight:700}}>CALORÍAS POR SEMANA</div>
+      <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80}}>
+        {weeks.map(function(w){
+          var gym = calByWeek[w].gym;
+          var cardio = calByWeek[w].cardio;
+          var total = gym+cardio;
+          var maxTotal = Math.max.apply(null,weeks.map(function(wk){return calByWeek[wk].gym+calByWeek[wk].cardio;}))||1;
+          var pct = total/maxTotal;
+          return <div key={w} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+            <div style={{fontSize:8,color:C.muted,fontWeight:600}}>{total>0?total:""}</div>
+            <div style={{width:"100%",display:"flex",flexDirection:"column",height:60}}>
+              <div style={{background:C.blue,borderRadius:"2px 2px 0 0",height:total>0?Math.round(cardio/maxTotal*60):0,minHeight:cardio>0?2:0}}/>
+              <div style={{background:C.green,height:total>0?Math.round(gym/maxTotal*60):0,minHeight:gym>0?2:0}}/>
+            </div>
+            <div style={{fontSize:7,color:C.muted,fontWeight:600}}>{weekLabel(w)}</div>
+          </div>;
+        })}
+      </div>
+      <div style={{display:"flex",gap:12,marginTop:8,justifyContent:"center"}}>
+        <span style={{fontSize:9,color:C.muted,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,background:C.green,borderRadius:2,display:"inline-block"}}/>Gym</span>
+        <span style={{fontSize:9,color:C.muted,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,background:C.blue,borderRadius:2,display:"inline-block"}}/>Cardio</span>
+      </div>
+    </div>}
+
+    {/* Duración semanal */}
+    {weeks.length>0&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:12,fontWeight:700}}>MINUTOS POR SEMANA</div>
+      <MiniBar values={weeks.map(function(w){return {val:durByWeek[w]||0,label:weekLabel(w)};})} color={C.accent} height={60}/>
+    </div>}
+
+    {/* FC media por sesión */}
+    {hrData.length>1&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>FRECUENCIA CARDÍACA MEDIA · ÚLTIMAS SESIONES</div>
+      <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Solo actividades con datos Garmin</div>
+      <MiniLine values={hrData} color={C.danger} height={60}/>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:10,color:C.muted}}>
+        <span>Mín: <strong style={{color:C.text}}>{Math.min.apply(null,hrData.map(function(v){return v.val;}))} bpm</strong></span>
+        <span>Prom: <strong style={{color:C.text}}>{avgHr} bpm</strong></span>
+        <span>Máx: <strong style={{color:C.text}}>{Math.max.apply(null,hrData.map(function(v){return v.val;}))} bpm</strong></span>
+      </div>
+    </div>}
+
+    {/* Body Battery drop */}
+    {bbData.length>0&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>DESCARGA BODY BATTERY POR SESIÓN</div>
+      <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Cuánto Body Battery consume cada actividad</div>
+      <MiniBar values={bbData.map(function(v){return {val:v.val,label:v.label};})} color={C.orange} height={60}/>
+      <div style={{marginTop:8}}>
+        {bbData.slice(-5).reverse().map(function(v,i){
+          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+C.border,fontSize:11}}>
+            <span style={{color:C.muted}}>{v.label}</span>
+            <span style={{flex:1,paddingLeft:8,fontWeight:600}}>{v.tipo}</span>
+            <span style={{color:C.orange,fontWeight:700}}>-{v.val}</span>
+          </div>;
+        })}
+      </div>
+    </div>}
+
+    {!filtered.length&&<div style={{textAlign:"center",color:C.muted,padding:"50px 20px"}}>
+      <div style={{fontSize:42,marginBottom:12}}>📈</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.text}}>Sin datos para este período</div>
+      <div style={{fontSize:12,marginTop:6}}>Registrá actividades o importá tu CSV de Garmin</div>
+    </div>}
+    <div style={{height:20}}/>
   </div>;
 }
 
@@ -1373,6 +1598,7 @@ function App(){
       {tab==="cal"&&<Calendar logs={logs} onNavigate={setTab}/>}
       {tab==="log"&&<LogWorkout routines={routines} addLog={addLog}/>}
       {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
+      {tab==="charts"&&<Charts logs={logs}/>}
       {tab==="ai"&&<AIAssistant logs={logs} profile={profile} routines={routines} apiKey={apiKey} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing} addLog={addLog} logs={logs}/>}
     </div>
