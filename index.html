@@ -98,6 +98,27 @@ async function sbFetch(url,key){
   }catch{return null;}
 }
 
+// ── SUPABASE CHAT ────────────────────────────────────────────
+async function sbSaveChat(url,key,msgs){
+  if(!url||!key) return;
+  await fetch(url+"/rest/v1/trainlog",{method:"POST",
+    headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+key,"Prefer":"resolution=merge-duplicates,return=minimal"},
+    body:JSON.stringify({id:"__ai_chat__",date:today(),type:"config",label:"ai_history",notes:"",data:JSON.stringify(msgs)})
+  }).catch(function(){});
+}
+async function sbLoadChat(url,key){
+  if(!url||!key) return null;
+  try{
+    var r = await fetch(url+"/rest/v1/trainlog?id=eq.__ai_chat__",
+      {headers:{"apikey":key,"Authorization":"Bearer "+key}});
+    var d = await r.json();
+    if(Array.isArray(d)&&d.length>0){
+      return JSON.parse(d[0].data||"null");
+    }
+  }catch{}
+  return null;
+}
+
 // ── GROQ API ─────────────────────────────────────────────────
 async function callGroq(key,sys,msgs){
   var messages = [{role:"system",content:sys}].concat(
@@ -916,17 +937,28 @@ function Calendar({logs,onNavigate}){
 }
 
 // ── AI ASSISTANT ─────────────────────────────────────────────
-function AIAssistant({logs,profile,routines,apiKey}){
+function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
   var INIT = [{role:"assistant",content:"¡Hola! Soy tu asistente de entrenamiento con Groq AI (gratis y rápido). Puedo analizar tu progreso, detectar patrones de energía o ciático, y sugerirte ajustes. ¿En qué te ayudo?"}];
   var [msgs,setMsgs] = useState(function(){return ls.g("tl-chat")||INIT;});
+  var [chatLoaded,setChatLoaded] = useState(false);
   var [inp,setInp] = useState("");
   var [load,setLoad] = useState(false);
   var ref = useRef(null);
   useEffect(function(){ref.current&&ref.current.scrollIntoView({behavior:"smooth"});},[msgs]);
-  useEffect(function(){ls.s("tl-chat",msgs);},[msgs]);
+  useEffect(function(){
+    if(chatLoaded||!sbUrl||!sbKey) return;
+    sbLoadChat(sbUrl,sbKey).then(function(remote){
+      if(remote&&remote.length>0){setMsgs(remote);ls.s("tl-chat",remote);}
+      setChatLoaded(true);
+    }).catch(function(){setChatLoaded(true);});
+  },[sbUrl,sbKey]);
+  useEffect(function(){
+    ls.s("tl-chat",msgs);
+    if(chatLoaded) sbSaveChat(sbUrl,sbKey,msgs);
+  },[msgs]);
   function ctx(){
     var p = profile;
-    var perfil = (p.name||"")+", "+(p.weight||"")+"kg, "+(p.height||"")+"cm, "+(p.age||"")+" años, objetivo: "+(p.goal||"");
+    var perfil = (p.name||"Luciano")+", "+(p.weight||"80")+"kg, "+(p.height||"170")+"cm, "+(p.age||"45")+" años, objetivo: "+(p.goal||"Gym→Natación, ciático");
     var ruts = routines.map(function(r){return r.name+": "+r.days.map(function(d){return d.name;}).join(", ");}).join(" | ");
     var hist = logs.slice(0,20).map(function(l){
       var estr = "";
@@ -1005,7 +1037,7 @@ function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setS
   var [showKey,setShowKey] = useState(false);
   function saveKey(){setApiKey(ki);ls.s("tl-groq-key",ki);setOk(true);setTimeout(function(){setOk(false);},2000);}
   function saveSb(){setSbUrl(su);setSbKey(sk);ls.s("tl-sb-url",su);ls.s("tl-sb-key",sk);setOk(true);setTimeout(function(){setOk(false);},2000);}
-  var fields = [{k:"name",l:"NOMBRE",t:"text",p:""},{k:"age",l:"EDAD",t:"number",p:""},{k:"weight",l:"PESO (kg)",t:"number",p:""},{k:"height",l:"ALTURA (cm)",t:"number",p:""},{k:"goal",l:"OBJETIVO",t:"text",p:""}];
+  var fields = [{k:"name",l:"NOMBRE",t:"text",p:"Luciano"},{k:"age",l:"EDAD",t:"number",p:"45"},{k:"weight",l:"PESO (kg)",t:"number",p:"80"},{k:"height",l:"ALTURA (cm)",t:"number",p:"170"},{k:"goal",l:"OBJETIVO",t:"text",p:"Gym → Natación, cuidar ciático"}];
   return <div>
     <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:18,fontWeight:700}}>DATOS DEL ATLETA</div>
     {fields.map(function(f){return <div key={f.k} style={{marginBottom:13}}><label style={st.lbl}>{f.l}</label><input type={f.t} value={profile[f.k]||""} onChange={function(e){setProfile(function(p){var n=Object.assign({},p);n[f.k]=e.target.value;return n;});}} style={st.inp} placeholder={f.p}/></div>;})}
@@ -1107,7 +1139,8 @@ function PinLock({onUnlock}){
 function App(){
   var [unlocked,setUnlocked] = useState(false);
   var [tab,setTab] = useState("dashboard");
-  var [profile,setProfile] = useState(function(){return ls.g("tl-pv5")||{name:"",weight:"",height:"",age:"",gender:"M",goal:""};});  var [logs,setLogs] = useState(function(){return ls.g("tl-lv5")||[];});
+  var [profile,setProfile] = useState(function(){return ls.g("tl-pv5")||{name:"Luciano",weight:"80",height:"170",age:"45",gender:"M",goal:"Gym → Natación, cuidar ciático"};});
+  var [logs,setLogs] = useState(function(){return ls.g("tl-lv5")||[];});
   var [apiKey,setApiKey] = useState(function(){return ls.g("tl-groq-key")||ls.g("tl-gk")||"";});
   var [sbUrl,setSbUrl] = useState(function(){return ls.g("tl-sb-url")||"";});
   var [sbKey,setSbKey] = useState(function(){return ls.g("tl-sb-key")||"";});
@@ -1152,7 +1185,7 @@ function App(){
       {tab==="cal"&&<Calendar logs={logs} onNavigate={setTab}/>}
       {tab==="log"&&<LogWorkout routines={routines} addLog={addLog}/>}
       {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
-      {tab==="ai"&&<AIAssistant logs={logs} profile={profile} routines={routines} apiKey={apiKey}/>}
+      {tab==="ai"&&<AIAssistant logs={logs} profile={profile} routines={routines} apiKey={apiKey} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing}/>}
     </div>
     <Nav tab={tab} set={setTab}/>
