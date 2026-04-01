@@ -81,7 +81,7 @@ async function sbDelete(url,key,id){
 async function sbFetch(url,key){
   if(!url||!key) return null;
   try{
-    var r = await fetch(url+"/rest/v1/trainlog?order=date.desc&limit=500",
+    var r = await fetch(url+"/rest/v1/trainlog?order=date.desc&limit=500&type=neq.config",
       {headers:{"apikey":key,"Authorization":"Bearer "+key}});
     var d = await r.json();
     if(!Array.isArray(d)) return null;
