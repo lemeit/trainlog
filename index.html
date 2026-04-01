@@ -423,7 +423,71 @@ function parseGarminCSV(text){
   return results;
 }
 
-// ── COMPONENTS ───────────────────────────────────────────────
+// ── GARMIN SLEEP CSV PARSER ──────────────────────────────────
+function parseGarminSleep(text){
+  var lines = text.trim().split("\n");
+  if(lines.length<2) return [];
+  var headers = lines[0].split(",").map(function(h){return h.trim().replace(/^\uFEFF/,"");});
+  var idx = {};
+  headers.forEach(function(h,i){idx[h]=i;});
+  var results = [];
+  for(var i=1;i<lines.length;i++){
+    var line = lines[i].trim();
+    if(!line) continue;
+    var cols = line.split(",").map(function(c){return c.trim().replace(/"/g,"");});
+    var g = function(name){return (cols[idx[name]]||"").trim();};
+    var fecha = g("Puntuación de sueño 7 días")||g(headers[0]);
+    if(!fecha||!fecha.match(/\d{4}-\d{2}-\d{2}/)) continue;
+    var score = parseInt(g("Puntuación"))||null;
+    var hrRest = parseInt(g("Frecuencia cardiaca en reposo"))||null;
+    var bodyBat = parseInt(g("Body Battery"))||null;
+    var spo2 = parseFloat(g("Pulsioximetría"))||null;
+    var breath = parseFloat(g("Respiración"))||null;
+    var hrv = parseInt(g("Estado de VFC"))||null;
+    var calidad = g("Calidad")||null;
+    var necesidad = g("Necesidad de sueño")||null;
+    var horaDormir = g("Hora de dormir")||null;
+    var horaDespertar = g("Hora de despertarte")||null;
+    // Duración "7h 21min" → minutos
+    var durStr = g("Duración")||"";
+    var durMin = null;
+    var mH = durStr.match(/(\d+)h/); var mM = durStr.match(/(\d+)min/);
+    if(mH||mM) durMin = (mH?parseInt(mH[1])*60:0)+(mM?parseInt(mM[1]):0);
+    var notes = [];
+    if(calidad) notes.push("Calidad: "+calidad);
+    if(hrRest) notes.push("FC reposo: "+hrRest+" bpm");
+    if(spo2) notes.push("SpO2: "+spo2+"%");
+    if(hrv) notes.push("HRV: "+hrv);
+    if(breath) notes.push("Resp: "+breath+" rpm");
+    if(horaDormir) notes.push("Durmió: "+horaDormir);
+    if(horaDespertar) notes.push("Despertó: "+horaDespertar);
+    if(necesidad) notes.push("Necesidad: "+necesidad);
+    results.push({
+      id:"sleep_"+fecha,
+      date:fecha,
+      type:"sleep",
+      label:"Sueño",
+      duration:durMin,
+      calories:null,
+      sleepScore:score,
+      hrRest:hrRest,
+      bodyBatMorning:bodyBat,
+      spo2:spo2,
+      breath:breath,
+      hrv:hrv,
+      sleepQuality:calidad,
+      sleepNeed:necesidad,
+      bedTime:horaDormir,
+      wakeTime:horaDespertar,
+      notes:notes.join(" · "),
+      source:"garmin_sleep",
+      exercises:[],
+    });
+  }
+  return results;
+}
+
+
 function Chip({label,color,bg}){
   return <span style={{fontSize:9,color:color,background:bg,padding:"3px 8px",borderRadius:5,fontWeight:700,letterSpacing:1}}>{label}</span>;
 }
@@ -1056,17 +1120,21 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
   },[msgs]);
   function ctx(){
     var p = profile;
-    var perfil = (p.name||"Luciano")+", "+(p.weight||"80")+"kg, "+(p.height||"170")+"cm, "+(p.age||"45")+" años, objetivo: "+(p.goal||"Gym→Natación, ciático");
+    var perfil = (p.name||"")+", "+(p.weight||"")+"kg, "+(p.height||"")+"cm, "+(p.age||"")+" años, objetivo: "+(p.goal||"");
     var ruts = routines.map(function(r){return r.name+": "+r.days.map(function(d){return d.name;}).join(", ");}).join(" | ");
-    var hist = logs.slice(0,20).map(function(l){
+    var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+    var hist = actLogs.slice(0,20).map(function(l){
       var estr = "";
       if(l.preEnergy) estr += " E-antes:"+l.preEnergy;
       if(l.prePain) estr += " Ciático:"+l.prePain+"/5";
       if(l.postEnergy) estr += " E-después:"+l.postEnergy;
       if(l.preNote) estr += " ("+l.preNote+")";
       if(l.postNote) estr += " ("+l.postNote+")";
+      if(l.calories) estr += " Cal:"+l.calories+"kcal";
+      if(l.hrAvg) estr += " FC:"+l.hrAvg+"bpm";
+      if(l.bodyBatDrop) estr += " BB:"+l.bodyBatDrop;
       var exStr = "";
-      if(l.exercises){
+      if(l.exercises&&l.exercises.length){
         exStr = " ["+l.exercises.map(function(e){
           var loaded = e.sets&&e.sets.filter(function(s){return s.weight;}).map(function(s){return s.reps+"r@"+s.weight+"kg";}).join(",");
           return e.name+(loaded?":"+loaded:"");
@@ -1074,9 +1142,13 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
       }
       return l.date+": "+l.label+(l.duration?" "+l.duration+"min":"")+(l.distance?" "+l.distance+"km":"")+estr+exStr;
     }).join("\n");
-    return "ATLETA: "+perfil+"\nRUTINAS: "+ruts+"\nHISTORIAL:\n"+(hist||"Sin datos aún");
+    var sleepLogs = logs.filter(function(l){return l.type==="sleep";}).slice(0,14);
+    var sleepHist = sleepLogs.length?"\n\nSUEÑO (últimas "+sleepLogs.length+" noches):\n"+sleepLogs.map(function(s){
+      return s.date+": "+s.sleepQuality+" score:"+s.sleepScore+" dur:"+(s.duration?Math.floor(s.duration/60)+"h"+s.duration%60+"m":"--")+" HRV:"+(s.hrv||"--")+" FCreposo:"+(s.hrRest||"--")+" SpO2:"+(s.spo2||"--")+"% BB-mañana:"+(s.bodyBatMorning||"--");
+    }).join("\n"):"";
+    return "ATLETA: "+perfil+"\nRUTINAS: "+ruts+"\nHISTORIAL ACTIVIDADES:\n"+(hist||"Sin datos aún")+sleepHist;
   }
-  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES basadas ÚNICAMENTE en los datos del historial que se te pasa. Cuando algo no es óptimo, decílo. Cuando el atleta está en lo correcto, decílo con fundamento. Evitá frases condescendientes. Irónico cuando corresponde. Datos clave del atleta: 45 años, 80kg, 170cm, ciático diagnosticado (episodios ocasionales), gym 4 días/semana, objetivo natación en mayo. IMC 27.7 — sobrepeso leve. REGLA CRÍTICA ANTI-ALUCINACIÓN: SOLO podés afirmar datos que estén EXPLÍCITAMENTE en el HISTORIAL que figura abajo. Si el atleta pregunta por datos que NO están en el historial (sueño, HRV, SpO2, eficiencia de sueño, fases de sueño, o cualquier métrica no listada), respondé SIEMPRE: No tengo esos datos en tu historial. Para analizarlos necesitás importarlos desde Garmin Connect. NUNCA inventes fechas, números, porcentajes ni métricas específicas que no estén en el contexto. Si no está en el historial, no existe para vos. Respuestas cortas y concretas. Máximo 4 párrafos salvo que el atleta pida detalle.\n\n"+ctx();
+  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES basadas ÚNICAMENTE en los datos del historial que se te pasa. Cuando algo no es óptimo, decílo. Cuando el atleta está en lo correcto, decílo con fundamento. Evitá frases condescendientes. Irónico cuando corresponde. Datos clave del atleta: 45 años, 80kg, 170cm, ciático diagnosticado (episodios ocasionales), gym 4 días/semana, objetivo natación en mayo. IMC 27.7 — sobrepeso leve. REGLA CRÍTICA ANTI-ALUCINACIÓN: SOLO podés afirmar datos que estén EXPLÍCITAMENTE en el HISTORIAL que figura abajo. Si el atleta pregunta por datos que NO están en el historial (por ejemplo sueño o HRV cuando no hay filas de SUEÑO en el contexto), respondé: No tengo esos datos, importalos desde Garmin Connect. Si SÍ hay datos de SUEÑO en el contexto, analizalos normalmente. Los datos de sueño incluyen: score, duración, HRV, FC reposo, SpO2, Body Battery mañana. NUNCA inventes fechas, números, porcentajes ni métricas específicas que no estén en el contexto. Si no está en el historial, no existe para vos. Respuestas cortas y concretas. Máximo 4 párrafos salvo que el atleta pida detalle.\n\n"+ctx();
   function send(){
     if(!inp.trim()||load) return;
     if(!apiKey){alert("Ingresá tu Groq API Key en ⚙️ Configuración");return;}
@@ -1168,8 +1240,11 @@ function Charts({logs}){
   var days = parseInt(period);
   var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-days);
   var filtered = logs.filter(function(l){
-    return new Date(l.date+"T12:00:00")>=cutoff && l.type!=="config";
+    return new Date(l.date+"T12:00:00")>=cutoff && l.type!=="config" && l.type!=="sleep";
   });
+  var sleepLogs = logs.filter(function(l){
+    return new Date(l.date+"T12:00:00")>=cutoff && l.type==="sleep";
+  }).sort(function(a,b){return a.date.localeCompare(b.date);});
 
   // ── Agrupar por semana ────────────────────────────────────
   function weekKey(dateStr){
@@ -1342,12 +1417,162 @@ function Charts({logs}){
       </div>
     </div>}
 
-    {!filtered.length&&<div style={{textAlign:"center",color:C.muted,padding:"50px 20px"}}>
+    {/* ── SUEÑO ── */}
+    {sleepLogs.length>0&&<div>
+      <div style={{color:C.purple,fontSize:9,letterSpacing:2,fontWeight:700,marginBottom:10,marginTop:4}}>SUEÑO · DATOS GARMIN</div>
+
+      {/* Resumen sueño */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        {[
+          {v:sleepLogs.length,u:"noches registradas",color:C.purple},
+          {v:sleepLogs.filter(function(s){return s.sleepScore;}).length?Math.round(sleepLogs.reduce(function(a,s){return a+(s.sleepScore||0);},0)/sleepLogs.filter(function(s){return s.sleepScore;}).length)+"pts":"--",u:"puntuación media",color:C.blue},
+          {v:sleepLogs.filter(function(s){return s.duration;}).length?Math.floor(sleepLogs.reduce(function(a,s){return a+(s.duration||0);},0)/sleepLogs.filter(function(s){return s.duration;}).length/60)+"h "+Math.round(sleepLogs.reduce(function(a,s){return a+(s.duration||0);},0)/sleepLogs.filter(function(s){return s.duration;}).length%60)+"m":"--",u:"duración media",color:C.green},
+          {v:sleepLogs.filter(function(s){return s.hrv;}).length?Math.round(sleepLogs.reduce(function(a,s){return a+(s.hrv||0);},0)/sleepLogs.filter(function(s){return s.hrv;}).length):"--",u:"HRV medio",color:C.orange},
+        ].map(function(x,i){
+          return <div key={i} style={{...st.card,textAlign:"center",padding:"12px 8px",marginBottom:0}}>
+            <div style={{color:x.color,fontSize:20,fontWeight:800,lineHeight:1}}>{x.v}</div>
+            <div style={{color:C.muted,fontSize:9,marginTop:4,fontWeight:700}}>{x.u}</div>
+          </div>;
+        })}
+      </div>
+
+      {/* Puntuación de sueño */}
+      {sleepLogs.length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>PUNTUACIÓN DE SUEÑO</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Mayor es mejor · máx 100</div>
+        <MiniLine values={sleepLogs.map(function(s){return {val:s.sleepScore||0,label:s.date.slice(5).replace("-","/")};})} color={C.purple} height={60}/>
+        <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+          {sleepLogs.slice(-7).map(function(s,i){
+            var QUAL_COLOR={"Excelente":C.green,"Bueno":C.blue,"Aceptable":C.orange,"Malo":C.danger};
+            var qc = QUAL_COLOR[s.sleepQuality]||C.muted;
+            return <div key={i} style={{background:C.card2,borderRadius:6,padding:"4px 8px",fontSize:10,display:"flex",gap:4,alignItems:"center"}}>
+              <span style={{color:C.muted}}>{s.date.slice(5).replace("-","/")}</span>
+              <span style={{color:qc,fontWeight:700}}>{s.sleepQuality}</span>
+              <span style={{color:C.purple,fontWeight:700}}>{s.sleepScore}</span>
+            </div>;
+          })}
+        </div>
+      </div>}
+
+      {/* Duración del sueño */}
+      {sleepLogs.length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>DURACIÓN DEL SUEÑO</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>En minutos · línea punteada = necesidad ({sleepLogs[0]&&sleepLogs[0].sleepNeed||"7h 50min"})</div>
+        <MiniBar values={sleepLogs.map(function(s){return {val:s.duration||0,label:s.date.slice(5).replace("-","/")};})} color={C.purple} height={60}/>
+      </div>}
+
+      {/* HRV */}
+      {sleepLogs.filter(function(s){return s.hrv;}).length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>HRV · VARIABILIDAD DE FC NOCTURNA</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Mayor HRV = mejor recuperación</div>
+        <MiniLine values={sleepLogs.map(function(s){return {val:s.hrv||0,label:s.date.slice(5).replace("-","/")};})} color={C.orange} height={60}/>
+      </div>}
+
+      {/* Body Battery al despertar */}
+      {sleepLogs.filter(function(s){return s.bodyBatMorning;}).length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>BODY BATTERY AL DESPERTAR</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Energía disponible al iniciar el día</div>
+        <MiniBar values={sleepLogs.map(function(s){return {val:s.bodyBatMorning||0,label:s.date.slice(5).replace("-","/")};})} color={C.blue} height={60}/>
+      </div>}
+
+      {/* FC en reposo */}
+      {sleepLogs.filter(function(s){return s.hrRest;}).length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>FC EN REPOSO NOCTURNA</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Menor es mejor · indica recuperación cardíaca</div>
+        <MiniLine values={sleepLogs.map(function(s){return {val:s.hrRest||0,label:s.date.slice(5).replace("-","/")};})} color={C.danger} height={60}/>
+      </div>}
+    </div>}
+
+    {!filtered.length&&!sleepLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"50px 20px"}}>
       <div style={{fontSize:42,marginBottom:12}}>📈</div>
       <div style={{fontSize:14,fontWeight:700,color:C.text}}>Sin datos para este período</div>
       <div style={{fontSize:12,marginTop:6}}>Registrá actividades o importá tu CSV de Garmin</div>
     </div>}
     <div style={{height:20}}/>
+  </div>;
+}
+
+// ── SLEEP IMPORTER COMPONENT ─────────────────────────────────
+function SleepImporter({logs,onImport}){
+  var [result,setResult] = useState(null);
+  var [loading,setLoading] = useState(false);
+  var fileRef = useRef(null);
+  function handleFile(e){
+    var file = e.target.files&&e.target.files[0];
+    if(!file) return;
+    setLoading(true);setResult(null);
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var parsed = parseGarminSleep(ev.target.result);
+        var existingIds = new Set(logs.map(function(l){return l.id;}));
+        var nuevas = []; var duplicadas = 0;
+        parsed.forEach(function(s){
+          if(existingIds.has(s.id)){duplicadas++;}
+          else{nuevas.push(s);}
+        });
+        setResult({nuevas:nuevas,duplicadas:duplicadas,total:parsed.length});
+        setLoading(false);
+      }catch(err){
+        setResult({error:"Error: "+err.message});
+        setLoading(false);
+      }
+    };
+    reader.readAsText(file,"UTF-8");
+  }
+  function confirmar(){
+    if(!result||!result.nuevas) return;
+    result.nuevas.forEach(function(s){onImport(s);});
+    setResult(Object.assign({},result,{importado:true}));
+    if(fileRef.current) fileRef.current.value="";
+  }
+  var QUAL_COLOR = {"Excelente":C.green,"Bueno":C.blue,"Aceptable":C.orange,"Malo":C.danger};
+  return <div style={{...st.card,background:"#f0eaff",borderColor:C.purple+"44",marginTop:10}}>
+    <div style={{color:C.purple,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>🌙 IMPORTAR SUEÑO · GARMIN</div>
+    <div style={{color:C.muted,fontSize:11,lineHeight:1.8,marginBottom:12}}>
+      En <strong style={{color:C.purple}}>connect.garmin.com</strong> → Salud → Sueño → Exportar CSV.<br/>
+      Podés subir el mismo archivo todas las semanas, solo importa noches nuevas.
+    </div>
+    <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}} id="sleep-file"/>
+    <label htmlFor="sleep-file" style={{...st.btn,background:C.purple,display:"block",textAlign:"center",cursor:"pointer",marginBottom:result?10:0}}>
+      {loading?"LEYENDO...":"📂 SELECCIONAR CSV DE SUEÑO"}
+    </label>
+    {result&&!result.error&&!result.importado&&<div style={{marginTop:10}}>
+      <div style={{...st.card,background:C.card2,padding:12,marginBottom:8}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Resumen:</div>
+        <div style={{fontSize:12,lineHeight:2}}>
+          📋 Total noches: <strong>{result.total}</strong><br/>
+          ✅ Nuevas: <strong style={{color:C.green}}>{result.nuevas.length}</strong><br/>
+          ⏭️ Ya existían: <strong style={{color:C.muted}}>{result.duplicadas}</strong>
+        </div>
+      </div>
+      {result.nuevas.length>0&&<div>
+        <div style={{maxHeight:160,overflowY:"auto",marginBottom:10}}>
+          {result.nuevas.map(function(s,i){
+            var qcolor = QUAL_COLOR[s.sleepQuality]||C.muted;
+            return <div key={i} style={{fontSize:11,padding:"5px 0",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <span style={{fontWeight:700}}>{s.date}</span>
+                <span style={{color:qcolor,fontWeight:700,marginLeft:8}}>{s.sleepQuality}</span>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                {s.duration&&<span style={{color:C.blue,fontSize:10}}>{Math.floor(s.duration/60)}h{s.duration%60}m</span>}
+                {s.sleepScore&&<span style={{color:C.purple,fontSize:10,fontWeight:700}}>{s.sleepScore}pts</span>}
+                {s.hrv&&<span style={{color:C.orange,fontSize:10}}>HRV:{s.hrv}</span>}
+              </div>
+            </div>;
+          })}
+        </div>
+        <button onClick={confirmar} style={{...st.btn,background:C.purple}}>
+          IMPORTAR {result.nuevas.length} NOCHE{result.nuevas.length!==1?"S":""}
+        </button>
+      </div>}
+      {result.nuevas.length===0&&<div style={{textAlign:"center",color:C.muted,fontSize:12,padding:"10px 0"}}>No hay noches nuevas para importar.</div>}
+    </div>}
+    {result&&result.importado&&<div style={{...st.card,background:C.purpleBg,borderColor:C.purple+"44",padding:12,marginTop:8,textAlign:"center"}}>
+      <div style={{color:C.purple,fontWeight:700,fontSize:13}}>✅ {result.nuevas.length} noche{result.nuevas.length!==1?"s":""} importada{result.nuevas.length!==1?"s":""}</div>
+    </div>}
+    {result&&result.error&&<div style={{color:C.danger,fontSize:12,marginTop:8,fontWeight:600}}>{result.error}</div>}
   </div>;
 }
 
@@ -1476,6 +1701,7 @@ function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setS
       <button onClick={saveSb} style={{...st.btn,background:ok?C.green:C.blue,marginBottom:8}}>{ok?"✓ GUARDADO":"GUARDAR SUPABASE"}</button>
       {sbUrl&&sbKey&&<div style={{marginTop:8}}><div style={{color:C.green,fontSize:11,fontWeight:700,textAlign:"center",marginBottom:8}}>{sbSyncing?"⏳ Sincronizando...":"✓ Supabase configurado"}</div><button onClick={function(){fetch(sbUrl+"/rest/v1/trainlog?select=count",{headers:{"apikey":sbKey,"Authorization":"Bearer "+sbKey,"Prefer":"count=exact"}}).then(function(r){var count=r.headers.get("content-range");return r.json().then(function(d){return {d:d,count:count,ok:r.ok,status:r.status};});}).then(function(x){if(x.ok){alert("✅ Conexión OK\nRegistros en Supabase: "+(x.count?x.count.split("/")[1]||"0":"0")+"\n\nSi ves 0 registros aunque cargaste actividades, el problema es RLS (Row Level Security). Desactivalo en Supabase: Authentication → Policies → trainlog → Disable RLS");}else{alert("❌ Error "+x.status+"\n"+JSON.stringify(x.d)+"\n\nVerificá que la URL y la key sean correctas");}}).catch(function(e){alert("❌ Sin conexión: "+e.message);});}} style={{...st.ghost,width:"100%",textAlign:"center",borderColor:C.blue+"44",color:C.blue,fontSize:11,marginTop:4}}>VERIFICAR CONEXION</button></div>}
     </div>
+    <SleepImporter logs={logs} onImport={addLog}/>
     <GarminImporter logs={logs} onImport={addLog}/>
     <div style={{...st.card,background:C.greenBg,borderColor:C.green+"44",marginTop:10}}>
       <div style={{color:C.green,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>📊 EXPORTAR A GOOGLE SHEETS</div>
