@@ -1107,8 +1107,7 @@ function PinLock({onUnlock}){
 function App(){
   var [unlocked,setUnlocked] = useState(false);
   var [tab,setTab] = useState("dashboard");
-  var [profile,setProfile] = useState(function(){return ls.g("tl-pv5")||{name:"Luciano",weight:"80",height:"170",age:"45",gender:"M",goal:"Gym → Natación, cuidar ciático"};});
-  var [logs,setLogs] = useState(function(){return ls.g("tl-lv5")||[];});
+  var [profile,setProfile] = useState(function(){return ls.g("tl-pv5")||{name:"",weight:"",height:"",age:"",gender:"M",goal:""};});  var [logs,setLogs] = useState(function(){return ls.g("tl-lv5")||[];});
   var [apiKey,setApiKey] = useState(function(){return ls.g("tl-groq-key")||ls.g("tl-gk")||"";});
   var [sbUrl,setSbUrl] = useState(function(){return ls.g("tl-sb-url")||"";});
   var [sbKey,setSbKey] = useState(function(){return ls.g("tl-sb-key")||"";});
