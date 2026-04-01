@@ -926,7 +926,7 @@ function AIAssistant({logs,profile,routines,apiKey}){
   useEffect(function(){ls.s("tl-chat",msgs);},[msgs]);
   function ctx(){
     var p = profile;
-    var perfil = (p.name||"Luciano")+", "+(p.weight||"80")+"kg, "+(p.height||"170")+"cm, "+(p.age||"45")+" años, objetivo: "+(p.goal||"Gym→Natación, ciático");
+    var perfil = (p.name||"")+", "+(p.weight||"")+"kg, "+(p.height||"")+"cm, "+(p.age||"")+" años, objetivo: "+(p.goal||"");
     var ruts = routines.map(function(r){return r.name+": "+r.days.map(function(d){return d.name;}).join(", ");}).join(" | ");
     var hist = logs.slice(0,20).map(function(l){
       var estr = "";
@@ -1005,7 +1005,7 @@ function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setS
   var [showKey,setShowKey] = useState(false);
   function saveKey(){setApiKey(ki);ls.s("tl-groq-key",ki);setOk(true);setTimeout(function(){setOk(false);},2000);}
   function saveSb(){setSbUrl(su);setSbKey(sk);ls.s("tl-sb-url",su);ls.s("tl-sb-key",sk);setOk(true);setTimeout(function(){setOk(false);},2000);}
-  var fields = [{k:"name",l:"NOMBRE",t:"text",p:"Luciano"},{k:"age",l:"EDAD",t:"number",p:"45"},{k:"weight",l:"PESO (kg)",t:"number",p:"80"},{k:"height",l:"ALTURA (cm)",t:"number",p:"170"},{k:"goal",l:"OBJETIVO",t:"text",p:"Gym → Natación, cuidar ciático"}];
+  var fields = [{k:"name",l:"NOMBRE",t:"text",p:""},{k:"age",l:"EDAD",t:"number",p:""},{k:"weight",l:"PESO (kg)",t:"number",p:""},{k:"height",l:"ALTURA (cm)",t:"number",p:""},{k:"goal",l:"OBJETIVO",t:"text",p:""}];
   return <div>
     <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:18,fontWeight:700}}>DATOS DEL ATLETA</div>
     {fields.map(function(f){return <div key={f.k} style={{marginBottom:13}}><label style={st.lbl}>{f.l}</label><input type={f.t} value={profile[f.k]||""} onChange={function(e){setProfile(function(p){var n=Object.assign({},p);n[f.k]=e.target.value;return n;});}} style={st.inp} placeholder={f.p}/></div>;})}
