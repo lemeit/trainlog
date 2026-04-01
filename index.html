@@ -112,9 +112,7 @@ async function sbLoadChat(url,key){
     var r = await fetch(url+"/rest/v1/trainlog?id=eq.__ai_chat__",
       {headers:{"apikey":key,"Authorization":"Bearer "+key}});
     var d = await r.json();
-    if(Array.isArray(d)&&d.length>0){
-      return JSON.parse(d[0].data||"null");
-    }
+    if(Array.isArray(d)&&d.length>0){return JSON.parse(d[0].data||"null");}
   }catch{}
   return null;
 }
@@ -324,6 +322,106 @@ var CD = [
   {name:"Estiramiento flexores de cadera",reps:"1 min/lado",note:""},
   {name:"Foam roller glúteos e isquios",reps:"3 min",note:"no sobre punto de dolor agudo"},
 ];
+
+// ── GARMIN CSV IMPORTER ───────────────────────────────────────
+function parseGarminCSV(text){
+  var lines = text.trim().split("\n");
+  if(lines.length<2) return [];
+  var headers = lines[0].split(",").map(function(h){return h.trim().replace(/^\uFEFF/,"");});
+  var idx = {};
+  headers.forEach(function(h,i){idx[h]=i;});
+  var TYPE_MAP = {
+    "Entreno de fuerza":"gym",
+    "Entrenamiento en cinta":"activity",
+    "Ciclismo en sala":"activity",
+    "Caminar":"activity",
+    "Carrera":"activity",
+    "Natación":"swimming",
+    "Ciclismo":"activity",
+    "Senderismo":"activity",
+  };
+  var ACT_MAP = {
+    "Entrenamiento en cinta":"running",
+    "Ciclismo en sala":"cycling",
+    "Caminar":"walking",
+    "Carrera":"running",
+    "Natación":"swimming",
+    "Ciclismo":"cycling",
+    "Senderismo":"walking",
+  };
+  var results = [];
+  for(var i=1;i<lines.length;i++){
+    var line = lines[i].trim();
+    if(!line) continue;
+    // parse CSV respetando comas dentro de comillas
+    var cols = [];
+    var cur = ""; var inQ = false;
+    for(var c=0;c<line.length;c++){
+      var ch = line[c];
+      if(ch==='"'){inQ=!inQ;}
+      else if(ch===","&&!inQ){cols.push(cur.trim());cur="";}
+      else{cur+=ch;}
+    }
+    cols.push(cur.trim());
+    var g = function(name){return (cols[idx[name]]||"").replace(/"/g,"").trim();};
+    var tipo = g("Tipo de actividad");
+    var fechaStr = g("Fecha"); // "2026-03-31 16:36:48"
+    var fecha = fechaStr.slice(0,10);
+    var hora = fechaStr.slice(11,16);
+    var tipo_app = TYPE_MAP[tipo]||"activity";
+    var actType = ACT_MAP[tipo]||"other";
+    var titulo = g("Título")||tipo;
+    var cal = parseInt(g("Calorías").replace(/,/g,""))||null;
+    var dist = parseFloat(g("Distancia").replace(/,/g,""))||null;
+    // Tiempo "01:03:13" → minutos
+    var tiempoStr = g("Tiempo");
+    var durMin = null;
+    if(tiempoStr){
+      var tp = tiempoStr.split(":").map(Number);
+      if(tp.length>=2) durMin = Math.round(tp[0]*60+tp[1]+(tp[2]||0)/60);
+    }
+    var fcMedia = parseInt(g("Frecuencia cardiaca media"))||null;
+    var fcMax = parseInt(g("FC máxima"))||null;
+    var bodyBatDrop = parseInt(g("Descarga de Body Battery"))||null;
+    var repsTotal = parseInt(g("Repeticiones totales").replace(/,/g,""))||null;
+    var seriesTotal = parseInt(g("Series totales"))||null;
+    var pasos = parseInt(g("Pasos").replace(/,/g,""))||null;
+    var teAerobico = parseFloat(g("TE aeróbico"))||null;
+    // ID único basado en fecha+hora exacta para evitar duplicados
+    var uid = "garmin_"+fechaStr.replace(/[^0-9]/g,"");
+    var notes = [];
+    if(fcMedia) notes.push("FC media: "+fcMedia+" bpm");
+    if(fcMax) notes.push("FC máx: "+fcMax+" bpm");
+    if(bodyBatDrop) notes.push("Body Battery: -"+Math.abs(bodyBatDrop));
+    if(repsTotal) notes.push("Reps: "+repsTotal);
+    if(seriesTotal) notes.push("Series: "+seriesTotal);
+    if(pasos) notes.push("Pasos: "+pasos.toLocaleString());
+    if(teAerobico) notes.push("TE aeróbico: "+teAerobico);
+    if(cal) notes.push("Calorías: "+cal+" kcal");
+    results.push({
+      id: uid,
+      date: fecha,
+      hora: hora,
+      type: tipo_app,
+      activityType: actType,
+      label: titulo,
+      duration: durMin,
+      distance: dist&&dist>0?dist:null,
+      calories: cal,
+      hrAvg: fcMedia,
+      hrMax: fcMax,
+      bodyBatDrop: bodyBatDrop,
+      repsTotal: repsTotal,
+      seriesTotal: seriesTotal,
+      steps: pasos,
+      teAerobico: teAerobico,
+      notes: notes.join(" · "),
+      source: "garmin",
+      exercises:[],
+    });
+  }
+  return results;
+}
 
 // ── COMPONENTS ───────────────────────────────────────────────
 function Chip({label,color,bg}){
@@ -1028,8 +1126,97 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
   </div>;
 }
 
+// ── GARMIN IMPORTER COMPONENT ────────────────────────────────
+function GarminImporter({logs,onImport}){
+  var [result,setResult] = useState(null);
+  var [loading,setLoading] = useState(false);
+  var fileRef = useRef(null);
+  function handleFile(e){
+    var file = e.target.files&&e.target.files[0];
+    if(!file) return;
+    setLoading(true);setResult(null);
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var parsed = parseGarminCSV(ev.target.result);
+        // IDs existentes en el historial
+        var existingIds = new Set(logs.map(function(l){return l.id;}));
+        // También chequear por fecha+label para actividades manuales
+        var existingKeys = new Set(logs.map(function(l){return l.date+"_"+l.label;}));
+        var nuevas = [];
+        var duplicadas = 0;
+        parsed.forEach(function(act){
+          if(existingIds.has(act.id)||existingKeys.has(act.date+"_"+act.label)){
+            duplicadas++;
+          } else {
+            nuevas.push(act);
+          }
+        });
+        setResult({nuevas:nuevas,duplicadas:duplicadas,total:parsed.length});
+        setLoading(false);
+      }catch(err){
+        setResult({error:"Error al leer el archivo: "+err.message});
+        setLoading(false);
+      }
+    };
+    reader.readAsText(file,"UTF-8");
+  }
+  function confirmar(){
+    if(!result||!result.nuevas) return;
+    result.nuevas.forEach(function(act){onImport(act);});
+    setResult(Object.assign({},result,{importado:true}));
+    if(fileRef.current) fileRef.current.value="";
+  }
+  return <div style={{...st.card,background:"#f0f7ff",borderColor:C.blue+"44",marginTop:10}}>
+    <div style={{color:C.blue,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>⌚ IMPORTAR DESDE GARMIN CONNECT</div>
+    <div style={{color:C.muted,fontSize:11,lineHeight:1.8,marginBottom:12}}>
+      En <strong style={{color:C.blue}}>connect.garmin.com</strong> → Actividades → Todas las actividades → Exportar CSV.<br/>
+      Podés subir el mismo archivo todas las semanas — solo importa las actividades nuevas.
+    </div>
+    <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}} id="garmin-file"/>
+    <label htmlFor="garmin-file" style={{...st.btn,background:C.blue,display:"block",textAlign:"center",cursor:"pointer",marginBottom:result?10:0}}>
+      {loading?"LEYENDO...":"📂 SELECCIONAR CSV DE GARMIN"}
+    </label>
+    {result&&!result.error&&!result.importado&&<div style={{marginTop:10}}>
+      <div style={{...st.card,background:C.card2,padding:12,marginBottom:8}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Resumen del archivo:</div>
+        <div style={{fontSize:12,color:C.text,lineHeight:2}}>
+          📋 Total actividades: <strong>{result.total}</strong><br/>
+          ✅ Nuevas para importar: <strong style={{color:C.green}}>{result.nuevas.length}</strong><br/>
+          ⏭️ Ya existían (ignoradas): <strong style={{color:C.muted}}>{result.duplicadas}</strong>
+        </div>
+      </div>
+      {result.nuevas.length>0&&<div>
+        <div style={{maxHeight:160,overflowY:"auto",marginBottom:10}}>
+          {result.nuevas.map(function(a,i){
+            return <div key={i} style={{fontSize:11,padding:"5px 0",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <span style={{fontWeight:700}}>{a.label}</span>
+                <span style={{color:C.muted}}> · {a.date}</span>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {a.duration&&<span style={{color:C.blue,fontSize:10}}>{a.duration}min</span>}
+                {a.calories&&<span style={{color:C.orange,fontSize:10}}>{a.calories}kcal</span>}
+                {a.hrAvg&&<span style={{color:C.danger,fontSize:10}}>♥{a.hrAvg}</span>}
+              </div>
+            </div>;
+          })}
+        </div>
+        <button onClick={confirmar} style={{...st.btn,background:C.green}}>
+          IMPORTAR {result.nuevas.length} ACTIVIDAD{result.nuevas.length!==1?"ES":""}
+        </button>
+      </div>}
+      {result.nuevas.length===0&&<div style={{textAlign:"center",color:C.muted,fontSize:12,padding:"10px 0"}}>No hay actividades nuevas para importar.</div>}
+    </div>}
+    {result&&result.importado&&<div style={{...st.card,background:C.greenBg,borderColor:C.green+"44",padding:12,marginTop:8,textAlign:"center"}}>
+      <div style={{color:C.green,fontWeight:700,fontSize:13}}>✅ {result.nuevas.length} actividad{result.nuevas.length!==1?"es":""}  importada{result.nuevas.length!==1?"s":""} correctamente</div>
+    </div>}
+    {result&&result.error&&<div style={{color:C.danger,fontSize:12,marginTop:8,fontWeight:600}}>{result.error}</div>}
+  </div>;
+}
+
 // ── SETTINGS ─────────────────────────────────────────────────
-function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setSbKey,sbSyncing}){
+function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setSbKey,sbSyncing,addLog,logs}){
   var [ki,setKi] = useState(apiKey);
   var [su,setSu] = useState(sbUrl);
   var [sk,setSk] = useState(sbKey);
@@ -1064,6 +1251,7 @@ function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setS
       <button onClick={saveSb} style={{...st.btn,background:ok?C.green:C.blue,marginBottom:8}}>{ok?"✓ GUARDADO":"GUARDAR SUPABASE"}</button>
       {sbUrl&&sbKey&&<div style={{marginTop:8}}><div style={{color:C.green,fontSize:11,fontWeight:700,textAlign:"center",marginBottom:8}}>{sbSyncing?"⏳ Sincronizando...":"✓ Supabase configurado"}</div><button onClick={function(){fetch(sbUrl+"/rest/v1/trainlog?select=count",{headers:{"apikey":sbKey,"Authorization":"Bearer "+sbKey,"Prefer":"count=exact"}}).then(function(r){var count=r.headers.get("content-range");return r.json().then(function(d){return {d:d,count:count,ok:r.ok,status:r.status};});}).then(function(x){if(x.ok){alert("✅ Conexión OK\nRegistros en Supabase: "+(x.count?x.count.split("/")[1]||"0":"0")+"\n\nSi ves 0 registros aunque cargaste actividades, el problema es RLS (Row Level Security). Desactivalo en Supabase: Authentication → Policies → trainlog → Disable RLS");}else{alert("❌ Error "+x.status+"\n"+JSON.stringify(x.d)+"\n\nVerificá que la URL y la key sean correctas");}}).catch(function(e){alert("❌ Sin conexión: "+e.message);});}} style={{...st.ghost,width:"100%",textAlign:"center",borderColor:C.blue+"44",color:C.blue,fontSize:11,marginTop:4}}>VERIFICAR CONEXION</button></div>}
     </div>
+    <GarminImporter logs={logs} onImport={addLog}/>
     <div style={{...st.card,background:C.greenBg,borderColor:C.green+"44",marginTop:10}}>
       <div style={{color:C.green,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>📊 EXPORTAR A GOOGLE SHEETS</div>
       <div style={{color:C.muted,fontSize:12,lineHeight:1.7}}>Historial → <strong style={{color:C.text}}>Exportar CSV</strong> → importar en Sheets: Archivo → Importar → Subir archivo.</div>
@@ -1139,7 +1327,7 @@ function PinLock({onUnlock}){
 function App(){
   var [unlocked,setUnlocked] = useState(false);
   var [tab,setTab] = useState("dashboard");
-  var [profile,setProfile] = useState(function(){return ls.g("tl-pv5")||{name:"Luciano",weight:"80",height:"170",age:"45",gender:"M",goal:"Gym → Natación, cuidar ciático"};});
+  var [profile,setProfile] = useState(function(){return ls.g("tl-pv5")||{name:"",weight:"",height:"",age:"",gender:"M",goal:""};});
   var [logs,setLogs] = useState(function(){return ls.g("tl-lv5")||[];});
   var [apiKey,setApiKey] = useState(function(){return ls.g("tl-groq-key")||ls.g("tl-gk")||"";});
   var [sbUrl,setSbUrl] = useState(function(){return ls.g("tl-sb-url")||"";});
@@ -1186,7 +1374,7 @@ function App(){
       {tab==="log"&&<LogWorkout routines={routines} addLog={addLog}/>}
       {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="ai"&&<AIAssistant logs={logs} profile={profile} routines={routines} apiKey={apiKey} sbUrl={sbUrl} sbKey={sbKey}/>}
-      {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing}/>}
+      {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing} addLog={addLog} logs={logs}/>}
     </div>
     <Nav tab={tab} set={setTab}/>
   </div>;
