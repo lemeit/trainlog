@@ -427,7 +427,9 @@ function parseGarminCSV(text){
 function parseGarminSleep(text){
   var lines = text.trim().split("\n");
   if(lines.length<2) return [];
-  var headers = lines[0].split(",").map(function(h){return h.trim().replace(/^\uFEFF/,"");});
+  // El CSV de sueño de Garmin tiene headers con nombres largos
+  // La fecha siempre está en la primera columna (cols[0])
+  var headers = lines[0].split(",").map(function(h){return h.trim().replace(/^\uFEFF/,"").replace(/"/g,"");});
   var idx = {};
   headers.forEach(function(h,i){idx[h]=i;});
   var results = [];
@@ -435,9 +437,60 @@ function parseGarminSleep(text){
     var line = lines[i].trim();
     if(!line) continue;
     var cols = line.split(",").map(function(c){return c.trim().replace(/"/g,"");});
-    var g = function(name){return (cols[idx[name]]||"").trim();};
-    var fecha = g("Puntuación de sueño 7 días")||g(headers[0]);
-    if(!fecha||!fecha.match(/\d{4}-\d{2}-\d{2}/)) continue;
+    var g = function(name){
+      var i = idx[name];
+      return i!=null?(cols[i]||"").trim():"";
+    };
+    // Fecha siempre en cols[0]
+    var fecha = cols[0].trim().replace(/"/g,"");
+    if(!fecha||!fecha.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
+    var score = parseInt(g("Puntuación"))||null;
+    var hrRest = parseInt(g("Frecuencia cardiaca en reposo"))||null;
+    var bodyBat = parseInt(g("Body Battery"))||null;
+    var spo2 = parseFloat(g("Pulsioximetría"))||null;
+    var breath = parseFloat(g("Respiración"))||null;
+    var hrv = parseInt(g("Estado de VFC"))||null;
+    var calidad = g("Calidad")||null;
+    var necesidad = g("Necesidad de sueño")||null;
+    var horaDormir = g("Hora de dormir")||null;
+    var horaDespertar = g("Hora de despertarte")||null;
+    var durStr = g("Duración")||"";
+    var durMin = null;
+    var mH = durStr.match(/(\d+)h/); var mM = durStr.match(/(\d+)min/);
+    if(mH||mM) durMin = (mH?parseInt(mH[1])*60:0)+(mM?parseInt(mM[1]):0);
+    var notes = [];
+    if(calidad) notes.push("Calidad: "+calidad);
+    if(hrRest) notes.push("FC reposo: "+hrRest+" bpm");
+    if(spo2) notes.push("SpO2: "+spo2+"%");
+    if(hrv) notes.push("HRV: "+hrv);
+    if(breath) notes.push("Resp: "+breath+" rpm");
+    if(horaDormir) notes.push("Durmió: "+horaDormir);
+    if(horaDespertar) notes.push("Despertó: "+horaDespertar);
+    if(necesidad) notes.push("Necesidad: "+necesidad);
+    results.push({
+      id:"sleep_"+fecha,
+      date:fecha,
+      type:"sleep",
+      label:"Sueño",
+      duration:durMin,
+      calories:null,
+      sleepScore:score,
+      hrRest:hrRest,
+      bodyBatMorning:bodyBat,
+      spo2:spo2,
+      breath:breath,
+      hrv:hrv,
+      sleepQuality:calidad,
+      sleepNeed:necesidad,
+      bedTime:horaDormir,
+      wakeTime:horaDespertar,
+      notes:notes.join(" · "),
+      source:"garmin_sleep",
+      exercises:[],
+    });
+  }
+  return results;
+}
     var score = parseInt(g("Puntuación"))||null;
     var hrRest = parseInt(g("Frecuencia cardiaca en reposo"))||null;
     var bodyBat = parseInt(g("Body Battery"))||null;
@@ -602,15 +655,16 @@ function ModoSwitch({profile,setProfile}){
 }
 
 function Dashboard({logs,routines,profile,setProfile,nav}){
-  var tl = logs.find(function(l){return l.date===today();});
-  var wl = logs.filter(function(l){return (new Date()-new Date(l.date+"T12:00:00"))/86400000<=7;});
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+  var tl = actLogs.find(function(l){return l.date===today();});
+  var wl = actLogs.filter(function(l){return (new Date()-new Date(l.date+"T12:00:00"))/86400000<=7;});
   var isGym = profile.modo !== "swimming";
   // Pick relevant main routine based on mode
   var gymRoutines = routines.filter(function(r){return r.type==="gym";});
   var swimRoutine = routines.find(function(r){return r.type==="swimming";});
   var homeRoutine = routines.find(function(r){return r.type==="home";});
   var R = isGym ? gymRoutines[0] : swimRoutine;
-  var gl = logs.filter(function(l){return isGym?(l.type==="gym"):(l.type==="swimming");});
+  var gl = actLogs.filter(function(l){return isGym?(l.type==="gym"):(l.type==="swimming");});
   var li = gl[0]&&gl[0].routineDay!=null?gl[0].routineDay:-1;
   var ni = R?(li+1)%R.days.length:0;
   var nd = R&&R.days[ni];
@@ -634,16 +688,16 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
       </div>
     </div>}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-      {[{v:wl.length,u:"esta semana"},{v:logs.length,u:"total"},{v:streak(logs),u:"racha días"}].map(function(x,i){
+      {[{v:wl.length,u:"esta semana"},{v:actLogs.length,u:"total"},{v:streak(actLogs),u:"racha días"}].map(function(x,i){
         return <div key={i} style={{...st.card,textAlign:"center",padding:"14px 8px"}}>
           <div style={{color:C.accent,fontSize:26,fontWeight:800,lineHeight:1}}>{x.v}</div>
           <div style={{color:C.muted,fontSize:9,marginTop:5,fontWeight:700}}>{x.u}</div>
         </div>;
       })}
     </div>
-    {logs.slice(0,5).length>0&&<div style={st.card}>
+    {actLogs.slice(0,5).length>0&&<div style={st.card}>
       <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>ACTIVIDAD RECIENTE</div>
-      {logs.slice(0,5).map(function(l,i){
+      {actLogs.slice(0,5).map(function(l,i){
         return <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:i<4?"1px solid "+C.border:"none"}}>
           <div>
             <div style={{fontSize:13,fontWeight:700}}>{l.label}</div>
@@ -653,7 +707,7 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
         </div>;
       })}
     </div>}
-    {!logs.length&&<div style={{textAlign:"center",color:C.muted,padding:"50px 20px"}}>
+    {!actLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"50px 20px"}}>
       <div style={{fontSize:42,marginBottom:12}}>🏋️</div>
       <div style={{fontSize:14,fontWeight:700,color:C.text}}>Todavía no hay registros</div>
       <div style={{fontSize:12,marginTop:6}}>¡Empezá tu primer entrenamiento!</div>
@@ -969,11 +1023,12 @@ function HistEdit({log,onSave,onClose}){
 }
 
 function History({logs,setLogs,sbUrl,sbKey}){
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
   var [ex,setEx] = useState(null);
   var [editing,setEditing] = useState(null);
   function csv(){
     var rows = [["Fecha","Tipo","Actividad","Duración","Distancia","Notas","Energía antes","Ciático","Energía después","Ejercicios"]];
-    logs.forEach(function(l){
+    actLogs.forEach(function(l){
       var exStr = l.exercises?l.exercises.map(function(e){return e.name+":"+((e.sets&&e.sets.filter(function(s){return s.reps||s.weight;}).map(function(s){return (s.reps||"?")+"rep@"+(s.weight||"?")+"kg";}).join("+"))||"–");}).join("|"):"";
       rows.push([l.date,l.type,l.label||"",l.duration||"",l.distance||"",l.notes||"",l.preEnergy||"",l.prePain!=null?l.prePain:"",l.postEnergy||"",exStr]);
     });
@@ -984,11 +1039,11 @@ function History({logs,setLogs,sbUrl,sbKey}){
   function save(updated){setLogs(function(p){return p.map(function(l){return l.id===updated.id?updated:l;});});sbUpsert(sbUrl,sbKey,updated);setEditing(null);}
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-      <div style={{color:C.muted,fontSize:9,letterSpacing:2,fontWeight:700}}>HISTORIAL · {logs.length} REGISTROS</div>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,fontWeight:700}}>HISTORIAL · {actLogs.length} REGISTROS</div>
       <button onClick={csv} style={st.ghost}>EXPORTAR CSV</button>
     </div>
-    {!logs.length&&<div style={{textAlign:"center",color:C.muted,padding:50}}>Sin registros todavía.</div>}
-    {logs.map(function(l){
+    {!actLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:50}}>Sin registros todavía.</div>}
+    {actLogs.map(function(l){
       var isExp = ex===l.id;
       var isEdit = editing===l.id;
       return <div key={l.id} style={{...st.card,cursor:"pointer"}} onClick={function(){if(!isEdit){setEx(isExp?null:l.id);}}}>
@@ -1012,6 +1067,7 @@ function History({logs,setLogs,sbUrl,sbKey}){
 
 // ── CALENDAR ─────────────────────────────────────────────────
 function Calendar({logs,onNavigate}){
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
   var [vd,setVd] = useState(new Date());
   var [sel,setSel] = useState(today());
   var yr=vd.getFullYear(), mo=vd.getMonth();
@@ -1019,7 +1075,7 @@ function Calendar({logs,onNavigate}){
   var firstDay = new Date(yr,mo,1).getDay();
   var daysInMonth = new Date(yr,mo+1,0).getDate();
   var logsByDate = {};
-  logs.forEach(function(l){if(!logsByDate[l.date])logsByDate[l.date]=[];logsByDate[l.date].push(l);});
+  actLogs.forEach(function(l){if(!logsByDate[l.date])logsByDate[l.date]=[];logsByDate[l.date].push(l);});
   var selLogs = logsByDate[sel]||[];
   var selDate = new Date(sel+"T12:00:00");
   var selDow = selDate.getDay();
