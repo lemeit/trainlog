@@ -1177,7 +1177,7 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
     setMsgs(nm);setInp("");setLoad(true);
     callGroq(apiKey,sys,nm).then(function(r){setMsgs(function(p){return p.concat([{role:"assistant",content:r}]);});}).catch(function(e){setMsgs(function(p){return p.concat([{role:"assistant",content:"Error: "+e.message}]);});}).finally(function(){setLoad(false);});
   }
-  var QQ = ["¿Cómo voy esta semana?","¿Qué descansar hoy?","Analizá mi ciático","Buscá patrones en mi energía"];
+  var QQ = ["¿Cómo voy esta semana?","¿Qué descansar hoy?","Analizá mi ciático","Buscá patrones en mi energía","¿Cómo viene mi hábito de sueño?"];
   if(!apiKey) return <div style={{textAlign:"center",padding:"40px 20px"}}>
     <div style={{fontSize:40,marginBottom:16}}>🤖</div>
     <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:8}}>Asistente IA con Groq</div>
@@ -1212,7 +1212,7 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
       {QQ.map(function(q){return <button key={q} onClick={function(){setInp(q);}} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:6,padding:"5px 9px",fontSize:10,color:C.muted,cursor:"pointer",fontWeight:600}}>{q}</button>;})}
     </div>
     <div style={{display:"flex",gap:8}}>
-      <input value={inp} onChange={function(e){setInp(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey)send();}} style={{...st.inp,flex:1}} placeholder="Preguuntá sobre tu progreso..." disabled={load}/>
+      <input value={inp} onChange={function(e){setInp(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey)send();}} style={{...st.inp,flex:1}} placeholder="Preguntá sobre tu progreso..." disabled={load}/>
       <button onClick={send} disabled={load||!inp.trim()} style={{...st.ghost,padding:"10px 16px",fontSize:16,opacity:load||!inp.trim()?0.4:1}}>→</button>
     </div>
   </div>;
