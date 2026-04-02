@@ -628,7 +628,7 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
         ?<div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:28}}>✅</span><div><div style={{fontSize:14,fontWeight:700}}>{tl.label}</div><div style={{color:C.muted,fontSize:11}}>{tl.duration?tl.duration+" min":"Completado"}</div></div></div>
         :<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{nd&&nd.name}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>{nd&&nd.exercises.length} ejercicios · {nd&&nd.focus}</div></div>
-          <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"10px 14px"}} onClick={function(){nav("log");}}>INICIAR →</button>
+          <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"10px 14px"}} onClick={function(){nav("log", isGym?"gym":"swimming");}}>INICIAR →</button>
         </div>
       }
     </div>}
@@ -636,7 +636,7 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
       <div style={{color:C.purple,fontSize:9,letterSpacing:2,marginBottom:6,fontWeight:700}}>💪 BANDAS EN CASA · {homeRoutine.days.length} BLOQUES</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{color:C.muted,fontSize:11}}>{homeRoutine.days.map(function(d){return d.name.split("·")[0].trim();}).join(" · ")}</div>
-        <button style={{...st.ghost,borderColor:C.purple+"55",color:C.purple,fontSize:9,padding:"6px 10px"}} onClick={function(){nav("log");}}>REGISTRAR</button>
+        <button style={{...st.ghost,borderColor:C.purple+"55",color:C.purple,fontSize:9,padding:"6px 10px"}} onClick={function(){nav("log","home");}}>REGISTRAR</button>
       </div>
     </div>}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
@@ -731,8 +731,8 @@ function Routines({routines}){
 
 
 // ── LOG WORKOUT ───────────────────────────────────────────────
-function LogWorkout({routines,addLog}){
-  var [mode,setMode] = useState(null);
+function LogWorkout({routines,addLog,initMode}){
+  var [mode,setMode] = useState(initMode||null);
   var [sr,setSr] = useState(routines[0]&&routines[0].id||"");
   var [sd,setSd] = useState(0);
   var [sets,setSets] = useState({});
@@ -1177,7 +1177,7 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
     setMsgs(nm);setInp("");setLoad(true);
     callGroq(apiKey,sys,nm).then(function(r){setMsgs(function(p){return p.concat([{role:"assistant",content:r}]);});}).catch(function(e){setMsgs(function(p){return p.concat([{role:"assistant",content:"Error: "+e.message}]);});}).finally(function(){setLoad(false);});
   }
-  var QQ = ["¿Cómo voy esta semana?","¿Qué descansar hoy?","Analizá mi ciático","¿Cómo viene mi hábito de sueño?", "Buscá patrones en mi energía"];
+  var QQ = ["¿Cómo voy esta semana?","¿Qué descansar hoy?","Analizá mi ciático","Buscá patrones en mi energía"];
   if(!apiKey) return <div style={{textAlign:"center",padding:"40px 20px"}}>
     <div style={{fontSize:40,marginBottom:16}}>🤖</div>
     <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:8}}>Asistente IA con Groq</div>
@@ -1212,7 +1212,7 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
       {QQ.map(function(q){return <button key={q} onClick={function(){setInp(q);}} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:6,padding:"5px 9px",fontSize:10,color:C.muted,cursor:"pointer",fontWeight:600}}>{q}</button>;})}
     </div>
     <div style={{display:"flex",gap:8}}>
-      <input value={inp} onChange={function(e){setInp(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey)send();}} style={{...st.inp,flex:1}} placeholder="Preguntá sobre tu progreso..." disabled={load}/>
+      <input value={inp} onChange={function(e){setInp(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey)send();}} style={{...st.inp,flex:1}} placeholder="Preguuntá sobre tu progreso..." disabled={load}/>
       <button onClick={send} disabled={load||!inp.trim()} style={{...st.ghost,padding:"10px 16px",fontSize:16,opacity:load||!inp.trim()?0.4:1}}>→</button>
     </div>
   </div>;
@@ -1798,6 +1798,12 @@ function PinLock({onUnlock}){
 function App(){
   var [unlocked,setUnlocked] = useState(false);
   var [tab,setTab] = useState("dashboard");
+  var [logMode,setLogMode] = useState(null);
+  function navTo(newTab, mode){
+    if(mode!==undefined) setLogMode(mode);
+    else setLogMode(null);
+    setTab(newTab);
+  }
   var [profile,setProfile] = useState(function(){return ls.g("tl-pv5")||{name:"",weight:"",height:"",age:"",gender:"M",goal:""};});
   var [logs,setLogs] = useState(function(){return (ls.g("tl-lv5")||[]).filter(function(l){return l.type!=="config";});});
   var [apiKey,setApiKey] = useState(function(){return ls.g("tl-groq-key")||ls.g("tl-gk")||"";});
@@ -1840,15 +1846,15 @@ function App(){
   return <div style={{background:C.bg,color:C.text,minHeight:"100vh",fontFamily:"system-ui,-apple-system,sans-serif",maxWidth:480,margin:"0 auto",paddingBottom:88}}>
     <Header profile={profile} tab={tab}/>
     <div style={{padding:"16px 14px 0"}}>
-      {tab==="dashboard"&&<Dashboard logs={logs} routines={routines} profile={profile} setProfile={setProfile} nav={setTab}/>}
-      {tab==="cal"&&<Calendar logs={logs} onNavigate={setTab}/>}
-      {tab==="log"&&<LogWorkout routines={routines} addLog={addLog}/>}
+      {tab==="dashboard"&&<Dashboard logs={logs} routines={routines} profile={profile} setProfile={setProfile} nav={navTo}/>}
+      {tab==="cal"&&<Calendar logs={logs} onNavigate={navTo}/>}
+      {tab==="log"&&<LogWorkout routines={routines} addLog={addLog} initMode={logMode}/>}
       {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="charts"&&<Charts logs={logs}/>}
       {tab==="ai"&&<AIAssistant logs={logs} profile={profile} routines={routines} apiKey={apiKey} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing} addLog={addLog} logs={logs}/>}
     </div>
-    <Nav tab={tab} set={setTab}/>
+    <Nav tab={tab} set={navTo}/>
   </div>;
 }
 
