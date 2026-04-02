@@ -491,54 +491,6 @@ function parseGarminSleep(text){
   }
   return results;
 }
-    var score = parseInt(g("Puntuación"))||null;
-    var hrRest = parseInt(g("Frecuencia cardiaca en reposo"))||null;
-    var bodyBat = parseInt(g("Body Battery"))||null;
-    var spo2 = parseFloat(g("Pulsioximetría"))||null;
-    var breath = parseFloat(g("Respiración"))||null;
-    var hrv = parseInt(g("Estado de VFC"))||null;
-    var calidad = g("Calidad")||null;
-    var necesidad = g("Necesidad de sueño")||null;
-    var horaDormir = g("Hora de dormir")||null;
-    var horaDespertar = g("Hora de despertarte")||null;
-    // Duración "7h 21min" → minutos
-    var durStr = g("Duración")||"";
-    var durMin = null;
-    var mH = durStr.match(/(\d+)h/); var mM = durStr.match(/(\d+)min/);
-    if(mH||mM) durMin = (mH?parseInt(mH[1])*60:0)+(mM?parseInt(mM[1]):0);
-    var notes = [];
-    if(calidad) notes.push("Calidad: "+calidad);
-    if(hrRest) notes.push("FC reposo: "+hrRest+" bpm");
-    if(spo2) notes.push("SpO2: "+spo2+"%");
-    if(hrv) notes.push("HRV: "+hrv);
-    if(breath) notes.push("Resp: "+breath+" rpm");
-    if(horaDormir) notes.push("Durmió: "+horaDormir);
-    if(horaDespertar) notes.push("Despertó: "+horaDespertar);
-    if(necesidad) notes.push("Necesidad: "+necesidad);
-    results.push({
-      id:"sleep_"+fecha,
-      date:fecha,
-      type:"sleep",
-      label:"Sueño",
-      duration:durMin,
-      calories:null,
-      sleepScore:score,
-      hrRest:hrRest,
-      bodyBatMorning:bodyBat,
-      spo2:spo2,
-      breath:breath,
-      hrv:hrv,
-      sleepQuality:calidad,
-      sleepNeed:necesidad,
-      bedTime:horaDormir,
-      wakeTime:horaDespertar,
-      notes:notes.join(" · "),
-      source:"garmin_sleep",
-      exercises:[],
-    });
-  }
-  return results;
-}
 
 
 function Chip({label,color,bg}){
