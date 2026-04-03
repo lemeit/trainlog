@@ -171,15 +171,16 @@ function fmtDate(iso){
 function fmtDateLong(iso){
   return new Date(iso+"T12:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
 }
-function chipForType(type,actType){
-  // swimming puede venir como type directo o como activityType dentro de activity
-  if(type==="swimming"||actType==="swimming") return {label:"🏊",color:C.blue,bg:C.blueBg};
-  if(type==="gym") return {label:"💪🏋️",color:C.green,bg:C.greenBg};
+function chipForType(type,actType,label){
+  var lbl=(label||"").toLowerCase();
+  // swimming puede venir como type directo, activityType, o por el label
+  if(type==="swimming"||actType==="swimming"||lbl.includes("nataci")||lbl.includes("piscina")||lbl.includes("swim")) return {label:"🏊",color:C.blue,bg:C.blueBg};
+  if(type==="gym") return {label:"🏋️",color:C.green,bg:C.greenBg};
   if(type==="home") return {label:"💪",color:C.purple,bg:C.purpleBg};
-  if(actType==="running"||type==="running") return {label:"🏃",color:C.orange,bg:C.orangeBg};
-  if(actType==="cycling"||type==="cycling") return {label:"🚴",color:C.orange,bg:C.orangeBg};
-  if(actType==="walking"||type==="walking") return {label:"🚶",color:C.muted,bg:C.card2};
-  if(type==="activity"&&!actType) return {label:"⚡",color:C.orange,bg:C.orangeBg};
+  if(actType==="running"||type==="running"||lbl.includes("carrera")||lbl.includes("cinta")) return {label:"🏃",color:C.orange,bg:C.orangeBg};
+  if(actType==="cycling"||type==="cycling"||lbl.includes("cicl")||lbl.includes("bici")) return {label:"🚴",color:C.orange,bg:C.orangeBg};
+  if(actType==="walking"||type==="walking"||lbl.includes("camin")) return {label:"🚶",color:C.muted,bg:C.card2};
+  if(lbl.includes("fuerza")||lbl.includes("entreno de fuerza")) return {label:"🏋️",color:C.green,bg:C.greenBg};
   return {label:"⚡",color:C.orange,bg:C.orangeBg};
 }
 function streak(logs){
@@ -519,8 +520,8 @@ function parseGarminSleep(text){
 function Chip({label,color,bg}){
   return <span style={{fontSize:9,color:color,background:bg,padding:"3px 8px",borderRadius:5,fontWeight:700,letterSpacing:1}}>{label}</span>;
 }
-function ChipLog({type,actType}){
-  var ch=chipForType(type,actType);
+function ChipLog({type,actType,label}){
+  var ch=chipForType(type,actType,label);
   return <Chip label={ch.label} color={ch.color} bg={ch.bg}/>;
 }
 function Back({fn}){
@@ -746,7 +747,7 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
             <div style={{fontSize:13,fontWeight:700}}>{l.label}</div>
             <div style={{color:C.muted,fontSize:10,marginTop:2}}>{fmtDate(l.date)}{l.duration?" · "+l.duration+"min":""}{l.distance?" · "+l.distance+"km":""}</div>
           </div>
-          <ChipLog type={l.type} actType={l.activityType}/>
+          <ChipLog type={l.type} actType={l.activityType} label={l.label}/>
         </div>;
       })}
     </div>}
@@ -1109,7 +1110,7 @@ function History({logs,setLogs,sbUrl,sbKey}){
             <div style={{color:C.muted,fontSize:10,marginTop:3}}>{fmtDate(l.date)}{l.duration?" · "+l.duration+"min":""}{l.distance?" · "+l.distance+"km":""}</div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <ChipLog type={l.type} actType={l.activityType}/>
+            <ChipLog type={l.type} actType={l.activityType} label={l.label}/>
             <button onClick={function(e){e.stopPropagation();setEditing(isEdit?null:l.id);setEx(null);}} style={{background:"none",border:"none",color:C.blue,cursor:"pointer",fontSize:12,padding:2,fontWeight:700}}>✏️</button>
             <button onClick={function(e){e.stopPropagation();del(l.id);}} style={{background:"none",border:"none",color:C.muted2,cursor:"pointer",fontSize:14,padding:2}}>✕</button>
           </div>
@@ -1161,7 +1162,7 @@ function Calendar({logs,onNavigate}){
           return <div key={d} onClick={function(){setSel(iso);}} style={{textAlign:"center",padding:"5px 2px",borderRadius:8,cursor:"pointer",background:isSel?C.accent:isToday?C.accentBg:"transparent",border:isToday&&!isSel?"1px solid "+C.accent+"44":"1px solid transparent"}}>
             <div style={{fontSize:12,fontWeight:isSel||isToday?700:400,color:isSel?"#fff":isToday?C.accent:C.text,lineHeight:1.4}}>{d}</div>
             <div style={{display:"flex",justifyContent:"center",gap:2,marginTop:2,minHeight:5}}>
-              {types.slice(0,3).map(function(t,ti){var ch=chipForType(t,"");return <div key={ti} style={{width:4,height:4,borderRadius:"50%",background:isSel?"rgba(255,255,255,0.8)":ch.color}}/>;  })}
+              {types.slice(0,3).map(function(t,ti){var ch=chipForType(t,"","");return <div key={ti} style={{width:4,height:4,borderRadius:"50%",background:isSel?"rgba(255,255,255,0.8)":ch.color}}/>;  })}
             </div>
           </div>;
         })}
@@ -1184,7 +1185,7 @@ function Calendar({logs,onNavigate}){
             <div style={{fontSize:8,color:isSel?"rgba(255,255,255,0.7)":C.muted,fontWeight:700,marginBottom:2}}>{DAY_NAMES[d.getDay()]}</div>
             <div style={{fontSize:13,fontWeight:700,color:isSel?"#fff":isT?C.accent:C.text}}>{d.getDate()}</div>
             <div style={{marginTop:3,display:"flex",flexDirection:"column",gap:2,alignItems:"center"}}>
-              {dl.map(function(l,li){var ch=chipForType(l.type,l.activityType);return <div key={li} style={{fontSize:7,background:isSel?"rgba(255,255,255,0.25)":ch.bg,color:isSel?"#fff":ch.color,borderRadius:3,padding:"1px 3px",fontWeight:700,maxWidth:34,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ch.label}</div>;  })}
+              {dl.map(function(l,li){var ch=chipForType(l.type,l.activityType,l.label);return <div key={li} style={{fontSize:7,background:isSel?"rgba(255,255,255,0.25)":ch.bg,color:isSel?"#fff":ch.color,borderRadius:3,padding:"1px 3px",fontWeight:700,maxWidth:34,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ch.label}</div>;  })}
             </div>
           </div>;
         })}
@@ -1200,7 +1201,7 @@ function Calendar({logs,onNavigate}){
         return <div key={i} style={{padding:"10px 0",borderBottom:i<selLogs.length-1?"1px solid "+C.border:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
             <div><div style={{fontSize:13,fontWeight:700}}>{l.label}</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}</div></div>
-            <ChipLog type={l.type} actType={l.activityType}/>
+            <ChipLog type={l.type} actType={l.activityType} label={l.label}/>
           </div>
           <LogDetail l={l}/>
         </div>;
