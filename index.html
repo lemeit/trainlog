@@ -276,14 +276,6 @@ var CASA = {id:"casa-bandas",name:"Bandas en Casa",type:"home",days:[
 ]};
 
 var NATACION = {id:"natacion",name:"Natación · Pileta 25m",type:"swimming",days:[
-  {name:"⚡ Calentamiento · Borde de pileta",focus:"3 min · De pie, sin equipamiento — justo antes de entrar al agua",exercises:[
-    {name:"Círculos de hombros hacia atrás",sets:1,reps:"10/brazo luego 10 juntos",note:"simula el recobro del crol",video:YT+"movilizacion+hombros+calentamiento+natacion"},
-    {name:"Rotación suave de cuello",sets:1,reps:"5/lado",note:"lento, sin brusquedad",video:YT+"rotacion+cuello+calentamiento+suave"},
-    {name:"Rotación de cadera con manos en cintura",sets:1,reps:"10 lentas",note:"activa el core",video:YT+"rotacion+cadera+calentamiento+pie"},
-    {name:"Rodilla al pecho parado",sets:1,reps:"5/lado · 3seg c/u",note:"estira piramidal sin agacharse — clave ciático",video:YT+"rodilla+pecho+parado+estiramiento+ciatico"},
-    {name:"Círculos de tobillos",sets:1,reps:"10/pie",note:"la patada del crol arranca desde el tobillo",video:YT+"movilizacion+tobillos+calentamiento+natacion"},
-    {name:"Inclinación lateral con brazo arriba",sets:1,reps:"5/lado",note:"moviliza la cadena lateral",video:YT+"inclinacion+lateral+calentamiento+natacion"},
-  ]},
   {name:"⚡ Precalentamiento en casa · 15 min",focus:"Antes de ir a la pileta — activación sin fatiga",exercises:[
     {name:"Gato-Camello",sets:2,reps:"10",note:"movilidad vertebral, nunca forzar",video:YT+"gato+camello+ejercicio+columna+espalda"},
     {name:"Bird-Dog",sets:2,reps:"10/lado",note:"activa lumbar y glúteo — esencial ciático",video:YT+"bird+dog+ejercicio+lumbar+ciatico+español"},
@@ -291,6 +283,14 @@ var NATACION = {id:"natacion",name:"Natación · Pileta 25m",type:"swimming",day
     {name:"Rotación hombros con banda",sets:2,reps:"15/lado",note:"codo a 90°, banda anclada a puerta",video:YT+"rotacion+hombro+banda+elastica+natacion"},
     {name:"Simulación brazada crol con banda",sets:2,reps:"10/lado",note:"torso inclinado, espalda recta",video:YT+"simulacion+brazada+crol+banda+elastica+seco+natacion"},
     {name:"Estiramiento piramidal",sets:1,reps:"45seg/lado",note:"tumbado, cruce de pierna",video:YT+"estiramiento+piramidal+nervio+ciatico"},
+  ]},
+  {name:"⚡ Calentamiento · Borde de pileta",focus:"3 min · De pie, sin equipamiento — justo antes de entrar al agua",exercises:[
+    {name:"Círculos de hombros hacia atrás",sets:1,reps:"10/brazo luego 10 juntos",note:"simula el recobro del crol",video:YT+"movilizacion+hombros+calentamiento+natacion"},
+    {name:"Rotación suave de cuello",sets:1,reps:"5/lado",note:"lento, sin brusquedad",video:YT+"rotacion+cuello+calentamiento+suave"},
+    {name:"Rotación de cadera con manos en cintura",sets:1,reps:"10 lentas",note:"activa el core",video:YT+"rotacion+cadera+calentamiento+pie"},
+    {name:"Rodilla al pecho parado",sets:1,reps:"5/lado · 3seg c/u",note:"estira piramidal sin agacharse — clave ciático",video:YT+"rodilla+pecho+parado+estiramiento+ciatico"},
+    {name:"Círculos de tobillos",sets:1,reps:"10/pie",note:"la patada del crol arranca desde el tobillo",video:YT+"movilizacion+tobillos+calentamiento+natacion"},
+    {name:"Inclinación lateral con brazo arriba",sets:1,reps:"5/lado",note:"moviliza la cadena lateral",video:YT+"inclinacion+lateral+calentamiento+natacion"},
   ]},
   {name:"Sesión A · Fondo suave",focus:"Sem 1-2 · 1400m · 45min",exercises:[
     {name:"Entrada crol suave",sets:1,reps:"200m",note:"sin apuro, calentando",video:YT+"tecnica+crol+natacion+principiantes+español"},
@@ -349,7 +349,7 @@ function parseGarminCSV(text){
     "Ciclismo en sala":"activity",
     "Caminar":"activity",
     "Carrera":"activity",
-    "Natación":"swimming","Natación en piscina":"swimming","Piscina":"swimming",
+    "Natación":"swimming","Natación en piscina":"swimming","Piscina":"swimming","Open Water":"swimming",
     "Ciclismo":"activity",
     "Senderismo":"activity",
   };
@@ -358,7 +358,7 @@ function parseGarminCSV(text){
     "Ciclismo en sala":"cycling",
     "Caminar":"walking",
     "Carrera":"running",
-    "Natación":"swimming","Natación en piscina":"swimming","Piscina":"swimming","Natación en piscina":"swimming","Piscina":"swimming",
+    "Natación":"swimming","Natación en piscina":"swimming","Piscina":"swimming","Open Water":"swimming",
     "Ciclismo":"cycling",
     "Senderismo":"walking",
   };
@@ -540,7 +540,7 @@ function Nav({tab,set}){
   var inMore=NAV_MORE.some(function(n){return n.id===tab;});
   return <div>
     {showMore&&<div onClick={function(){setShowMore(false);}} style={{position:"fixed",inset:0,zIndex:98}}/>}
-    {showMore&&<div style={{position:"fixed",bottom:60,left:"50%",transform:"translateX(-50%)",width:"min(480px,100%)",background:"#fff",borderTop:"1px solid "+C.border,borderRadius:"12px 12px 0 0",zIndex:99,padding:"8px 0 4px",boxShadow:"0 -4px 20px rgba(0,0,0,0.1)"}}>
+    {showMore&&<div style={{position:"fixed",bottom:60,left:"50%",transform:"translateX(-50%)",width:"min(480px,100%)",background:"#fff",borderTop:"1px solid "+C.border,borderRadius:"12px 12px 0 0",zIndex:99,padding:"8px 0 4px",boxShadow:"0 -4px 20px rgba(0,0,0,0.12)"}}>
       <div style={{display:"flex",padding:"0 8px",gap:4}}>
         {NAV_MORE.map(function(n){
           var isActive=tab===n.id;
@@ -628,6 +628,49 @@ function EstadoForm({preE,setPreE,pain,setPain,preN,setPreN,postE,setPostE,postN
   </div>;
 }
 
+// ── MINI CALENDAR (en Dashboard) ────────────────────────────
+function MiniCalendar({logs,nav}){
+  var [vd,setVd]=useState(new Date());
+  var yr=vd.getFullYear(),mo=vd.getMonth();
+  var monthName=vd.toLocaleDateString("es-AR",{month:"long",year:"numeric"});
+  var firstDay=new Date(yr,mo,1).getDay();
+  var daysInMonth=new Date(yr,mo+1,0).getDate();
+  var logsByDate={};
+  logs.forEach(function(l){if(!logsByDate[l.date])logsByDate[l.date]=[];logsByDate[l.date].push(l);});
+  var DAY_ABBR=["D","L","M","X","J","V","S"];
+  return <div style={st.card}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <button onClick={function(){setVd(new Date(yr,mo-1,1));}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16,padding:"2px 8px"}}>‹</button>
+      <div style={{fontWeight:700,fontSize:12,textTransform:"capitalize",color:C.text}}>{monthName}</div>
+      <button onClick={function(){setVd(new Date(yr,mo+1,1));}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16,padding:"2px 8px"}}>›</button>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1,marginBottom:3}}>
+      {DAY_ABBR.map(function(d){return <div key={d} style={{textAlign:"center",fontSize:8,color:C.muted,fontWeight:700,padding:"1px 0"}}>{d}</div>;})}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1}}>
+      {Array.from({length:firstDay},function(_,i){return <div key={"e"+i}/>;  })}
+      {Array.from({length:daysInMonth},function(_,i){
+        var d=i+1;var iso=isoDay(yr,mo,d);
+        var dl=logsByDate[iso]||[];
+        var isToday=iso===today();
+        var hasSwim=dl.some(function(l){return l.type==="swimming";});
+        var hasGym=dl.some(function(l){return l.type==="gym";});
+        var hasAct=dl.some(function(l){return l.type==="activity"||l.type==="home";});
+        var hasSomething=hasSwim||hasGym||hasAct;
+        return <div key={d} style={{textAlign:"center",padding:"3px 1px",borderRadius:6,background:isToday?C.accent:hasSomething?C.accentBg:"transparent",border:isToday?"none":hasSomething?"1px solid "+C.accent+"33":"1px solid transparent"}}>
+          <div style={{fontSize:10,fontWeight:isToday?700:hasSomething?600:400,color:isToday?"#fff":hasSomething?C.accent:C.muted,lineHeight:1.4}}>{d}</div>
+          <div style={{display:"flex",justifyContent:"center",gap:1,minHeight:4}}>
+            {hasSwim&&<div style={{width:3,height:3,borderRadius:"50%",background:isToday?"rgba(255,255,255,0.8)":C.blue}}/>}
+            {hasGym&&<div style={{width:3,height:3,borderRadius:"50%",background:isToday?"rgba(255,255,255,0.8)":C.green}}/>}
+            {hasAct&&!hasSwim&&!hasGym&&<div style={{width:3,height:3,borderRadius:"50%",background:isToday?"rgba(255,255,255,0.8)":C.orange}}/>}
+          </div>
+        </div>;
+      })}
+    </div>
+    <button onClick={function(){nav("cal");}} style={{...st.ghost,width:"100%",textAlign:"center",marginTop:10,fontSize:10,padding:"6px"}}>VER CALENDARIO COMPLETO →</button>
+  </div>;
+}
+
 // ── DASHBOARD ────────────────────────────────────────────────
 function ModoSwitch({profile,setProfile}){
   var iGym = profile.modo!=="swimming";
@@ -693,10 +736,11 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
       })}
     </div>}
     {!actLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"50px 20px"}}>
-      <div style={{fontSize:42,marginBottom:12}}>🏋️</div>
-      <div style={{fontSize:14,fontWeight:700,color:C.text}}>Todavía no hay registros</div>
-      <div style={{fontSize:12,marginTop:6}}>¡Empezá tu primer entrenamiento!</div>
+      <div style={{fontSize:42,marginBottom:12}}>🏊</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.text}}>¡A nadar!</div>
+      <div style={{fontSize:12,marginTop:6}}>Registrá tu primera sesión</div>
     </div>}
+    <MiniCalendar logs={actLogs} nav={nav}/>
   </div>;
 }
 
@@ -1063,11 +1107,10 @@ function History({logs,setLogs,sbUrl,sbKey}){
 }
 
 // ── CALENDAR ─────────────────────────────────────────────────
-function Calendar({logs,setLogs,onNavigate,sbUrl,sbKey}){
+function Calendar({logs,onNavigate}){
   var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
   var [vd,setVd] = useState(new Date());
   var [sel,setSel] = useState(today());
-  var [editing,setEditing] = useState(null);
   var yr=vd.getFullYear(), mo=vd.getMonth();
   var monthName = vd.toLocaleDateString("es-AR",{month:"long",year:"numeric"});
   var firstDay = new Date(yr,mo,1).getDay();
@@ -1079,7 +1122,6 @@ function Calendar({logs,setLogs,onNavigate,sbUrl,sbKey}){
   var selDow = selDate.getDay();
   var weekStart = new Date(selDate);weekStart.setDate(selDate.getDate()-selDow);
   var weekDays = Array.from({length:7},function(_,i){var d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return d;});
-  function saveEdit(updated){setLogs(function(p){return p.map(function(l){return l.id===updated.id?updated:l;});});sbUpsert(sbUrl,sbKey,updated);setEditing(null);}
   var DAY_ABBR = ["D","L","M","X","J","V","S"];
   var DAY_NAMES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
   return <div>
@@ -1128,7 +1170,7 @@ function Calendar({logs,setLogs,onNavigate,sbUrl,sbKey}){
             <div style={{fontSize:8,color:isSel?"rgba(255,255,255,0.7)":C.muted,fontWeight:700,marginBottom:2}}>{DAY_NAMES[d.getDay()]}</div>
             <div style={{fontSize:13,fontWeight:700,color:isSel?"#fff":isT?C.accent:C.text}}>{d.getDate()}</div>
             <div style={{marginTop:3,display:"flex",flexDirection:"column",gap:2,alignItems:"center"}}>
-              {dl.map(function(l,li){return <div key={li} style={{fontSize:7,background:isSel?"rgba(255,255,255,0.25)":l.type==="gym"?C.greenBg:C.blueBg,color:isSel?"#fff":l.type==="gym"?C.green:C.blue,borderRadius:3,padding:"1px 3px",fontWeight:700,maxWidth:34,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.type==="gym"?"GYM":(l.activityType||"ACT").slice(0,3).toUpperCase()}</div>;  })}
+              {dl.map(function(l,li){(function(){var ch=chipForType(l.type,l.activityType);return <div key={li} style={{fontSize:7,background:isSel?"rgba(255,255,255,0.25)":ch.bg,color:isSel?"#fff":ch.color,borderRadius:3,padding:"1px 3px",fontWeight:700,maxWidth:34,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ch.label}</div>;})()  })}
             </div>
           </div>;
         })}
@@ -1141,21 +1183,12 @@ function Calendar({logs,setLogs,onNavigate,sbUrl,sbKey}){
       </div>
       {!selLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"16px 0",fontSize:12}}>Sin actividad este día</div>}
       {selLogs.map(function(l,i){
-        var isEdit=editing===l.id;
-        var ch=chipForType(l.type,l.activityType);
         return <div key={i} style={{padding:"10px 0",borderBottom:i<selLogs.length-1?"1px solid "+C.border:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-            <div>
-              <div style={{fontSize:13,fontWeight:700}}>{l.label}</div>
-              <div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}{l.calories?" · "+l.calories+"kcal":""}</div>
-            </div>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <Chip label={ch.label} color={ch.color} bg={ch.bg}/>
-              <button onClick={function(){setEditing(isEdit?null:l.id);}} style={{background:"none",border:"none",color:C.blue,cursor:"pointer",fontSize:12,padding:2}}>✏️</button>
-            </div>
+            <div><div style={{fontSize:13,fontWeight:700}}>{l.label}</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}</div></div>
+            <Chip label={l.type==="gym"?"GYM":l.type==="swimming"?"🏊":l.type==="home"?"💪":(l.activityType||"OTRA").toUpperCase().slice(0,4)} color={l.type==="gym"?C.green:l.type==="swimming"?C.blue:l.type==="home"?C.purple:C.orange} bg={l.type==="gym"?C.greenBg:l.type==="swimming"?C.blueBg:l.type==="home"?C.purpleBg:C.orangeBg}/>
           </div>
-          {!isEdit&&<LogDetail l={l}/>}
-          {isEdit&&<HistEdit log={l} onSave={saveEdit} onClose={function(){setEditing(null);}}/>}
+          <LogDetail l={l}/>
         </div>;
       })}
     </div>
@@ -1212,7 +1245,7 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
     }).join("\n"):"";
     return "ATLETA: "+perfil+"\nRUTINAS: "+ruts+"\nHISTORIAL ACTIVIDADES:\n"+(hist||"Sin datos aún")+sleepHist;
   }
-  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES basadas ÚNICAMENTE en los datos del historial. Evitá frases condescendientes. Irónico cuando corresponde. Datos clave: 45 años, 80kg, 170cm, ciático diagnosticado, COMENZÓ NATACIÓN en abril 2026 (dejó el gym definitivamente), objetivo mejorar técnica y condición en pileta. IMC 27.7. REGLA CRÍTICA ANTI-ALUCINACIÓN: SOLO podés afirmar datos que estén EXPLÍCITAMENTE en el HISTORIAL. Si el atleta pregunta por datos que NO están (sueño, HRV, SpO2 sin filas de SUEÑO en contexto), respondé: No tengo esos datos, importalos desde Garmin Connect. Si SÍ hay datos de SUEÑO, analizalos normalmente. NUNCA inventes fechas, números ni métricas. Respuestas cortas y concretas. Máximo 4 párrafos.\n\n"+ctx();
+  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES basadas ÚNICAMENTE en los datos del historial que se te pasa. Cuando algo no es óptimo, decílo. Cuando el atleta está en lo correcto, decílo con fundamento. Evitá frases condescendientes. Irónico cuando corresponde. Datos clave del atleta: 45 años, 80kg, 170cm, ciático diagnosticado (episodios ocasionales), gym 4 días/semana, objetivo natación en mayo. IMC 27.7 — sobrepeso leve. REGLA CRÍTICA ANTI-ALUCINACIÓN: SOLO podés afirmar datos que estén EXPLÍCITAMENTE en el HISTORIAL que figura abajo. Si el atleta pregunta por datos que NO están en el historial (por ejemplo sueño o HRV cuando no hay filas de SUEÑO en el contexto), respondé: No tengo esos datos, importalos desde Garmin Connect. Si SÍ hay datos de SUEÑO en el contexto, analizalos normalmente. Los datos de sueño incluyen: score, duración, HRV, FC reposo, SpO2, Body Battery mañana. NUNCA inventes fechas, números, porcentajes ni métricas específicas que no estén en el contexto. Si no está en el historial, no existe para vos. Respuestas cortas y concretas. Máximo 4 párrafos salvo que el atleta pida detalle.\n\n"+ctx();
   function send(){
     if(!inp.trim()||load) return;
     if(!apiKey){alert("Ingresá tu Groq API Key en ⚙️ Configuración");return;}
@@ -1263,38 +1296,41 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
 }
 
 // ── CHARTS ───────────────────────────────────────────────────
-function MiniBar({values,color,maxVal,height}){
-  var max = maxVal||Math.max.apply(null,values.map(function(v){return v.val||0;}))||1;
-  return <div style={{display:"flex",alignItems:"flex-end",gap:3,height:height||60}}>
-    {values.map(function(v,i){
-      var pct = max>0?(v.val||0)/max:0;
-      return <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-        <div style={{width:"100%",background:pct>0?color:C.border,borderRadius:"3px 3px 0 0",height:Math.max(pct*(height||60),pct>0?3:0),transition:"height 0.3s"}}/>
-        <div style={{fontSize:7,color:C.muted,fontWeight:600,textAlign:"center",lineHeight:1}}>{v.label}</div>
-      </div>;
-    })}
+function MiniBar({values,color,height}){
+  var h=height||60;
+  var max=Math.max.apply(null,values.map(function(v){return v.val||0;}))||1;
+  return <div style={{overflowX:"auto"}}>
+    <div style={{display:"flex",alignItems:"flex-end",gap:3,height:h,minWidth:values.length*28}}>
+      {values.map(function(v,i){
+        var pct=max>0?(v.val||0)/max:0;
+        return <div key={i} style={{flex:"0 0 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+          <div style={{width:"100%",background:pct>0?color:C.border+"44",borderRadius:"3px 3px 0 0",height:Math.max(pct*h,pct>0?3:0)}}/>
+          <div style={{fontSize:7,color:C.muted,fontWeight:600,textAlign:"center",lineHeight:1,whiteSpace:"nowrap"}}>{v.label}</div>
+        </div>;
+      })}
+    </div>
   </div>;
 }
 function MiniLine({values,color,height}){
-  var max = Math.max.apply(null,values.map(function(v){return v.val||0;}))||1;
-  var min = Math.min.apply(null,values.filter(function(v){return v.val>0;}).map(function(v){return v.val;}))||0;
-  var range = max-min||1;
-  var w=280, h=height||60, pad=4;
-  var pts = values.map(function(v,i){
-    var x = pad + (i/(values.length-1||1))*(w-pad*2);
-    var y = v.val>0 ? h-pad - ((v.val-min)/range)*(h-pad*2) : h-pad;
+  var valids=values.filter(function(v){return v.val>0;});
+  if(valids.length<2) return <div style={{color:C.muted,fontSize:11,padding:"8px 0"}}>Pocos datos aún</div>;
+  var max=Math.max.apply(null,valids.map(function(v){return v.val;}))||1;
+  var min=Math.min.apply(null,valids.map(function(v){return v.val;}))||0;
+  var range=max-min||1;
+  var h=height||60; var pad=8;
+  var W=Math.max(values.length*28,200);
+  var pts=values.map(function(v,i){
+    var x=pad+(i/(values.length-1||1))*(W-pad*2);
+    var y=v.val>0?h-pad-((v.val-min)/range)*(h-pad*2):null;
     return {x:x,y:y,val:v.val,label:v.label};
   });
-  var path = pts.filter(function(p){return p.val>0;}).map(function(p,i){return (i===0?"M":"L")+p.x+","+p.y;}).join(" ");
+  var pathPts=pts.filter(function(p){return p.y!==null;});
+  var path=pathPts.map(function(p,i){return (i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1);}).join(" ");
   return <div style={{overflowX:"auto"}}>
-    <svg width={w} height={h+20} style={{display:"block"}}>
-      {pts.filter(function(p){return p.val>0;}).map(function(p,i){
-        return <circle key={i} cx={p.x} cy={p.y} r={3} fill={color}/>;
-      })}
+    <svg width={W} height={h+18} style={{display:"block"}}>
+      {pathPts.map(function(p,i){return <circle key={i} cx={p.x} cy={p.y} r={3} fill={color}/>;  })}
       {path&&<path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round"/>}
-      {pts.map(function(p,i){
-        return <text key={i} x={p.x} y={h+14} textAnchor="middle" fontSize={7} fill={C.muted}>{p.label}</text>;
-      })}
+      {pts.map(function(p,i){return <text key={i} x={p.x} y={h+14} textAnchor="middle" fontSize={7} fill={C.muted}>{p.label}</text>;})}
     </svg>
   </div>;
 }
@@ -1330,13 +1366,14 @@ function Charts({logs}){
 
   // ── Calorías por semana ───────────────────────────────────
   var calByWeek = {};
-  weeks.forEach(function(w){ calByWeek[w]={gym:0,cardio:0}; });
+  weeks.forEach(function(w){ calByWeek[w]={gym:0,swim:0,other:0}; });
   filtered.forEach(function(l){
     if(!l.calories) return;
     var w = weekKey(l.date);
-    if(!calByWeek[w]) calByWeek[w]={gym:0,cardio:0};
+    if(!calByWeek[w]) calByWeek[w]={gym:0,swim:0,other:0};
     if(l.type==="gym") calByWeek[w].gym+=l.calories;
-    else calByWeek[w].cardio+=l.calories;
+    else if(l.type==="swimming") calByWeek[w].swim+=l.calories;
+    else calByWeek[w].other+=l.calories;
   });
 
   // ── FC media por sesión (solo Garmin) ────────────────────
@@ -1356,7 +1393,7 @@ function Charts({logs}){
     if(!l.duration) return;
     var w = weekKey(l.date);
     if(!durByWeek[w]) durByWeek[w]=0;
-    durByWeek[w]+=l.duration;
+    durByWeek[w]+=(parseFloat(l.duration)||0);
   });
 
   // ── Distribución de tipos ─────────────────────────────────
@@ -1367,7 +1404,7 @@ function Charts({logs}){
   // ── Stats resumen ─────────────────────────────────────────
   var totalCal = filtered.reduce(function(s,l){return s+(l.calories||0);},0);
   var avgHr = hrData.length?Math.round(hrData.reduce(function(s,v){return s+v.val;},0)/hrData.length):null;
-  var totalDur = filtered.reduce(function(s,l){return s+(l.duration||0);},0);
+  var totalDur = filtered.reduce(function(s,l){return s+(parseFloat(l.duration)||0);},0);
   var maxBBdrop = bbData.length?Math.max.apply(null,bbData.map(function(v){return v.val;})):null;
 
   var PERIOD_OPTS = [["7","7 días"],["30","30 días"],["90","3 meses"]];
@@ -1386,7 +1423,7 @@ function Charts({logs}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
       {[
         {v:filtered.length,u:"actividades",color:C.accent},
-        {v:totalDur?Math.round(totalDur/60)+"h "+totalDur%60+"m":"--",u:"tiempo total",color:C.blue},
+        {v:totalDur?Math.floor(totalDur/60)+"h "+pad2(Math.round(totalDur%60))+"m":"--",u:"tiempo total",color:C.blue},
         {v:totalCal?totalCal.toLocaleString()+" kcal":"--",u:"calorías",color:C.orange},
         {v:avgHr?avgHr+" bpm":"--",u:"FC media",color:C.danger},
       ].map(function(x,i){
@@ -1422,28 +1459,30 @@ function Charts({logs}){
     </div>
 
     {/* Calorías por semana */}
-    {weeks.length>0&&Object.values(calByWeek).some(function(w){return w.gym+w.cardio>0;})&&<div style={st.card}>
+    {weeks.length>0&&Object.values(calByWeek).some(function(w){return w.gym+w.swim+w.other>0;})&&<div style={st.card}>
       <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:12,fontWeight:700}}>CALORÍAS POR SEMANA</div>
-      <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80}}>
-        {weeks.map(function(w){
-          var gym = calByWeek[w].gym;
-          var cardio = calByWeek[w].cardio;
-          var total = gym+cardio;
-          var maxTotal = Math.max.apply(null,weeks.map(function(wk){return calByWeek[wk].gym+calByWeek[wk].cardio;}))||1;
-          var pct = total/maxTotal;
-          return <div key={w} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-            <div style={{fontSize:8,color:C.muted,fontWeight:600}}>{total>0?total:""}</div>
-            <div style={{width:"100%",display:"flex",flexDirection:"column",height:60}}>
-              <div style={{background:C.blue,borderRadius:"2px 2px 0 0",height:total>0?Math.round(cardio/maxTotal*60):0,minHeight:cardio>0?2:0}}/>
-              <div style={{background:C.green,height:total>0?Math.round(gym/maxTotal*60):0,minHeight:gym>0?2:0}}/>
-            </div>
-            <div style={{fontSize:7,color:C.muted,fontWeight:600}}>{weekLabel(w)}</div>
-          </div>;
-        })}
+      <div style={{overflowX:"auto"}}>
+        <div style={{display:"flex",alignItems:"flex-end",gap:3,height:80,minWidth:weeks.length*36}}>
+          {weeks.map(function(w){
+            var gym=calByWeek[w].gym||0;var swim=calByWeek[w].swim||0;var other=calByWeek[w].other||0;
+            var total=gym+swim+other;
+            var maxTotal=Math.max.apply(null,weeks.map(function(wk){return (calByWeek[wk].gym||0)+(calByWeek[wk].swim||0)+(calByWeek[wk].other||0);}))||1;
+            return <div key={w} style={{flex:"0 0 32px",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <div style={{fontSize:8,color:C.muted,fontWeight:600}}>{total>0?total:""}</div>
+              <div style={{width:"100%",display:"flex",flexDirection:"column",height:60}}>
+                <div style={{background:C.blue,borderRadius:"2px 2px 0 0",height:total>0?Math.round(swim/maxTotal*60):0,minHeight:swim>0?2:0}}/>
+                <div style={{background:C.green,height:total>0?Math.round(gym/maxTotal*60):0,minHeight:gym>0?2:0}}/>
+                <div style={{background:C.orange,height:total>0?Math.round(other/maxTotal*60):0,minHeight:other>0?2:0}}/>
+              </div>
+              <div style={{fontSize:7,color:C.muted,fontWeight:600}}>{weekLabel(w)}</div>
+            </div>;
+          })}
+        </div>
       </div>
       <div style={{display:"flex",gap:12,marginTop:8,justifyContent:"center"}}>
+        <span style={{fontSize:9,color:C.muted,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,background:C.blue,borderRadius:2,display:"inline-block"}}/>Natación</span>
         <span style={{fontSize:9,color:C.muted,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,background:C.green,borderRadius:2,display:"inline-block"}}/>Gym</span>
-        <span style={{fontSize:9,color:C.muted,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,background:C.blue,borderRadius:2,display:"inline-block"}}/>Cardio</span>
+        <span style={{fontSize:9,color:C.muted,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,background:C.orange,borderRadius:2,display:"inline-block"}}/>Otro</span>
       </div>
     </div>}
 
@@ -1729,7 +1768,6 @@ function GarminImporter({logs,onImport}){
   </div>;
 }
 
-
 // ── HELP ─────────────────────────────────────────────────────
 function Help(){
   var [sec,setSec]=useState(null);
@@ -1748,13 +1786,13 @@ function Help(){
     {id:"registro",icon:"＋",title:"Registrar un entrenamiento",content:[
       "Tocá Reg. o INICIAR → desde el inicio.",
       "Elegí: Natación, Gimnasio, Bandas en casa u Otra actividad.",
-      "Seleccioná el bloque/sesión del desplegable.",
+      "Seleccioná el bloque o sesión del desplegable.",
       "El Estado físico (📋) es opcional pero valioso para la IA.",
       "Al guardar se sincroniza automáticamente con Supabase.",
     ]},
     {id:"bloques",icon:"🏊",title:"Sesiones de natación",content:[
-      "⚡ Calentamiento borde de pileta: 3 min de movilidad antes de entrar.",
-      "⚡ Precalentamiento en casa: 15 min de activación antes de ir.",
+      "⚡ Precalentamiento en casa: 15 min de activación antes de ir a la pileta.",
+      "⚡ Calentamiento borde de pileta: 3 min de movilidad justo antes de entrar.",
       "Sesión A: Fondo suave — 1400m, ideal para empezar la semana.",
       "Sesión B: Técnica + accesorios — aletas, pull buoy, manoplas.",
       "Sesión C: Resistencia base — 1600m con series.",
@@ -1763,24 +1801,25 @@ function Help(){
     ]},
     {id:"garmin",icon:"⌚",title:"Importar datos del Garmin FR265",content:[
       "Desde connect.garmin.com exportás CSV de Actividades y de Sueño.",
-      "Actividades: sección Actividades → Todas → Exportar CSV.",
-      "Sueño: sección Salud → Sueño → Exportar CSV.",
+      "Actividades: Actividades → Todas → Exportar CSV.",
+      "Sueño: Salud → Sueño → Exportar CSV.",
       "Subí los archivos desde Config. La app detecta duplicados automáticamente.",
       "Podés subir el mismo CSV todas las semanas sin problema.",
       "Natación en piscina del Garmin se importa correctamente como 🏊.",
     ]},
     {id:"ia",icon:"🤖",title:"Asistente IA",content:[
-      "Analiza tus últimas 20 actividades y 14 noches de sueño.",
+      "Analiza tus últimas 20 actividades y 14 noches de sueño registradas.",
       "Solo responde con datos reales de tu historial — nunca inventa.",
-      "Preguntale: '¿Nado mejor después de dormir bien?', '¿Cómo va mi ciático?'",
+      "Preguntale: ¿Nado mejor después de dormir bien? ¿Cómo va mi ciático?",
       "El historial de chat se sincroniza entre dispositivos vía Supabase.",
       "Necesitás API Key gratuita de console.groq.com.",
     ]},
     {id:"supabase",icon:"☁️",title:"Sincronización entre dispositivos",content:[
       "Los datos viven en Supabase — base de datos en la nube gratuita.",
       "En un dispositivo nuevo, ingresá las credenciales en Config.",
-      "Se sincronizan: actividades, datos de sueño e historial de IA.",
+      "Se sincronizan: actividades, sueño e historial de IA.",
       "El PIN de acceso es solo local, no viaja entre dispositivos.",
+      "Si ves diferencias entre dispositivos, verificá que Supabase esté configurado en ambos.",
     ]},
     {id:"ciatico",icon:"⚠️",title:"Protocolo ciático",content:[
       "Si sentís hormigueo hacia la pierna: pará inmediatamente.",
@@ -1804,7 +1843,7 @@ function Help(){
             <span style={{fontSize:20}}>{s.icon}</span>
             <span style={{fontSize:13,fontWeight:700}}>{s.title}</span>
           </div>
-          <span style={{color:C.muted,fontSize:14}}>{isOpen?"▲":"▼"}</span>
+          <span style={{color:C.muted,fontSize:14,flexShrink:0}}>{isOpen?"▲":"▼"}</span>
         </button>
         {isOpen&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid "+C.border}}>
           {s.content.map(function(line,i){
@@ -1982,7 +2021,7 @@ function App(){
     <Header profile={profile} tab={tab}/>
     <div style={{padding:"16px 14px 0"}}>
       {tab==="dashboard"&&<Dashboard logs={logs} routines={routines} profile={profile} setProfile={setProfile} nav={navTo}/>}
-      {tab==="cal"&&<Calendar logs={logs} setLogs={setLogs} onNavigate={navTo} sbUrl={sbUrl} sbKey={sbKey}/>}
+      {tab==="cal"&&<Calendar logs={logs} onNavigate={navTo}/>}
       {tab==="log"&&<LogWorkout routines={routines} addLog={addLog} initMode={logMode}/>}
       {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="charts"&&<Charts logs={logs}/>}
