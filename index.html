@@ -518,7 +518,7 @@ function VidBtn({url}){
 }
 
 // ── HEADER ───────────────────────────────────────────────────
-var TAB_NAMES = {dashboard:"Inicio",cal:"Calendario",log:"Registrar",history:"Historial",charts:"Gráficos",ai:"Asistente IA",settings:"Configuración",help:"Ayuda"};
+var TAB_NAMES = {dashboard:"Inicio",cal:"Calendario",log:"Registrar",history:"Historial",charts:"Gráficos",ai:"Asistente IA",settings:"Configuración",help:"Ayuda",food:"Comidas & Agua"};
 function Header({profile,tab}){
   return <div style={{padding:"16px 16px 12px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:C.bg,zIndex:50}}>
     <div>
@@ -534,7 +534,7 @@ function Header({profile,tab}){
 
 // ── NAV ──────────────────────────────────────────────────────
 var NAV_MAIN=[{id:"dashboard",icon:"⚡",label:"Inicio"},{id:"log",icon:"＋",label:"Reg."},{id:"ai",icon:"🤖",label:"IA"},{id:"settings",icon:"⚙️",label:"Config."}];
-var NAV_MORE=[{id:"cal",icon:"📅",label:"Calendario"},{id:"history",icon:"📊",label:"Historial"},{id:"charts",icon:"📈",label:"Gráficos"},{id:"help",icon:"❓",label:"Ayuda"}];
+var NAV_MORE=[{id:"cal",icon:"📅",label:"Calendario"},{id:"history",icon:"📊",label:"Historial"},{id:"charts",icon:"📈",label:"Gráficos"},{id:"food",icon:"🍽️",label:"Comidas"},{id:"help",icon:"❓",label:"Ayuda"}];
 function Nav({tab,set}){
   var [showMore,setShowMore]=useState(false);
   var inMore=NAV_MORE.some(function(n){return n.id===tab;});
@@ -683,7 +683,7 @@ function ModoSwitch({profile,setProfile}){
 }
 
 function Dashboard({logs,routines,profile,setProfile,nav}){
-  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
   var tl = actLogs.find(function(l){return l.date===today();});
   var wl = actLogs.filter(function(l){return (new Date()-new Date(l.date+"T12:00:00"))/86400000<=7;});
   var isGym = profile.modo !== "swimming";
@@ -1064,7 +1064,7 @@ function HistEdit({log,onSave,onClose}){
 }
 
 function History({logs,setLogs,sbUrl,sbKey}){
-  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
   var [ex,setEx] = useState(null);
   var [editing,setEditing] = useState(null);
   function csv(){
@@ -1108,7 +1108,7 @@ function History({logs,setLogs,sbUrl,sbKey}){
 
 // ── CALENDAR ─────────────────────────────────────────────────
 function Calendar({logs,onNavigate}){
-  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
   var [vd,setVd] = useState(new Date());
   var [sel,setSel] = useState(today());
   var yr=vd.getFullYear(), mo=vd.getMonth();
@@ -1219,7 +1219,7 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
     var p = profile;
     var perfil = (p.name||"")+", "+(p.weight||"")+"kg, "+(p.height||"")+"cm, "+(p.age||"")+" años, objetivo: "+(p.goal||"");
     var ruts = routines.map(function(r){return r.name+": "+r.days.map(function(d){return d.name;}).join(", ");}).join(" | ");
-    var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+    var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
     var hist = actLogs.slice(0,20).map(function(l){
       var estr = "";
       if(l.preEnergy) estr += " E-antes:"+l.preEnergy;
@@ -1243,9 +1243,13 @@ function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
     var sleepHist = sleepLogs.length?"\n\nSUEÑO (últimas "+sleepLogs.length+" noches):\n"+sleepLogs.map(function(s){
       return s.date+": "+s.sleepQuality+" score:"+s.sleepScore+" dur:"+(s.duration?Math.floor(s.duration/60)+"h"+s.duration%60+"m":"--")+" HRV:"+(s.hrv||"--")+" FCreposo:"+(s.hrRest||"--")+" SpO2:"+(s.spo2||"--")+"% BB-mañana:"+(s.bodyBatMorning||"--");
     }).join("\n"):"";
-    return "ATLETA: "+perfil+"\nRUTINAS: "+ruts+"\nHISTORIAL ACTIVIDADES:\n"+(hist||"Sin datos aún")+sleepHist;
+    var foodLogs = logs.filter(function(l){return l.type==="food";}).slice(0,30);
+    var foodHist = foodLogs.length?"\n\nALIMENTACIÓN (últimos registros):\n"+foodLogs.map(function(l){
+      return l.date+" "+l.label+": "+l.notes;
+    }).join("\n"):"";
+    return "ATLETA: "+perfil+"\nRUTINAS: "+ruts+"\nHISTORIAL ACTIVIDADES:\n"+(hist||"Sin datos aún")+sleepHist+foodHist;
   }
-  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES basadas ÚNICAMENTE en los datos del historial que se te pasa. Cuando algo no es óptimo, decílo. Cuando el atleta está en lo correcto, decílo con fundamento. Evitá frases condescendientes. Irónico cuando corresponde. Datos clave del atleta: 45 años, 80kg, 170cm, ciático diagnosticado (episodios ocasionales), gym 4 días/semana, objetivo natación en mayo. IMC 27.7 — sobrepeso leve. REGLA CRÍTICA ANTI-ALUCINACIÓN: SOLO podés afirmar datos que estén EXPLÍCITAMENTE en el HISTORIAL que figura abajo. Si el atleta pregunta por datos que NO están en el historial (por ejemplo sueño o HRV cuando no hay filas de SUEÑO en el contexto), respondé: No tengo esos datos, importalos desde Garmin Connect. Si SÍ hay datos de SUEÑO en el contexto, analizalos normalmente. Los datos de sueño incluyen: score, duración, HRV, FC reposo, SpO2, Body Battery mañana. NUNCA inventes fechas, números, porcentajes ni métricas específicas que no estén en el contexto. Si no está en el historial, no existe para vos. Respuestas cortas y concretas. Máximo 4 párrafos salvo que el atleta pida detalle.\n\n"+ctx();
+  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES basadas ÚNICAMENTE en los datos del historial. Evitá frases condescendientes. Irónico cuando corresponde. Datos clave: 45 años, 80kg, 170cm, ciático diagnosticado, COMENZÓ NATACIÓN en abril 2026 (dejó el gym definitivamente), objetivo mejorar técnica y condición en pileta. IMC 27.7. REGLA CRÍTICA ANTI-ALUCINACIÓN: SOLO podés afirmar datos que estén EXPLÍCITAMENTE en el HISTORIAL. Si el atleta pregunta por datos que NO están, respondé que no los tenés. Si hay datos de SUEÑO analizalos. Si hay datos de ALIMENTACIÓN cruzalos con rendimiento y sueño — buscá patrones como: ¿come mejor los días que nada bien? ¿la hidratación afecta el Body Battery? ¿cena liviana = mejor sueño? NUNCA inventes fechas, números ni métricas. Respuestas cortas y concretas. Máximo 4 párrafos.\n\n"+ctx();
   function send(){
     if(!inp.trim()||load) return;
     if(!apiKey){alert("Ingresá tu Groq API Key en ⚙️ Configuración");return;}
@@ -1768,6 +1772,212 @@ function GarminImporter({logs,onImport}){
   </div>;
 }
 
+// ── FOOD LOG ─────────────────────────────────────────────────
+var MEALS = [
+  {id:"desayuno", icon:"☀️", label:"Desayuno"},
+  {id:"almuerzo", icon:"🌤️", label:"Almuerzo"},
+  {id:"merienda", icon:"🌥️", label:"Merienda"},
+  {id:"cena",     icon:"🌙", label:"Cena"},
+];
+var FOODS = [
+  {id:"huevo",    icon:"🥚", label:"Huevo",       cat:"proteína"},
+  {id:"carne",    icon:"🥩", label:"Carne",        cat:"proteína"},
+  {id:"pescado",  icon:"🐟", label:"Pescado",      cat:"proteína"},
+  {id:"legumbre", icon:"🫘", label:"Legumbres",    cat:"proteína"},
+  {id:"lacteo",   icon:"🥛", label:"Lácteos",      cat:"proteína"},
+  {id:"arroz",    icon:"🍚", label:"Arroz/Pasta",  cat:"carbos"},
+  {id:"pan",      icon:"🍞", label:"Pan/Tostada",  cat:"carbos"},
+  {id:"papa",     icon:"🥔", label:"Papa",         cat:"carbos"},
+  {id:"fruta",    icon:"🍌", label:"Fruta",        cat:"carbos"},
+  {id:"verdura",  icon:"🥗", label:"Verdura",      cat:"vegetal"},
+  {id:"grasa",    icon:"🥑", label:"Grasa buena",  cat:"grasa"},
+  {id:"cafe",     icon:"☕", label:"Café/Mate",    cat:"bebida"},
+  {id:"dulce",    icon:"🍬", label:"Dulce",        cat:"extra"},
+  {id:"procesado",icon:"🍟", label:"Ultra-proc.",  cat:"extra"},
+];
+var PORTIONS = ["1","2","3+"];
+var PORTION_LABEL = {"1":"1 porción","2":"2 porciones","3+":"abundante"};
+
+function FoodLog({logs,setLogs,sbUrl,sbKey}){
+  var [fecha,setFecha] = useState(today());
+  var [meal,setMeal] = useState("desayuno");
+  var [selected,setSelected] = useState({});  // {foodId: "1"|"2"|"3+"}
+  var [agua,setAgua] = useState(0);           // en vasos (250ml)
+  var [notes,setNotes] = useState("");
+  var [saved,setSaved] = useState(false);
+
+  // Cargar datos existentes del día
+  var existingDay = logs.filter(function(l){return l.type==="food"&&l.date===fecha;});
+  var aguaHoy = existingDay.reduce(function(sum,l){return sum+(l.aguaVasos||0);},0);
+
+  function toggleFood(foodId){
+    setSelected(function(prev){
+      var next = Object.assign({},prev);
+      if(next[foodId]){
+        // Rotar: sin selección → 1 → 2 → 3+ → sin selección
+        var idx = PORTIONS.indexOf(next[foodId]);
+        if(idx>=PORTIONS.length-1){ delete next[foodId]; }
+        else{ next[foodId] = PORTIONS[idx+1]; }
+      } else {
+        next[foodId] = "1";
+      }
+      return next;
+    });
+  }
+
+  function guardar(){
+    var items = Object.keys(selected).map(function(id){
+      var food = FOODS.find(function(f){return f.id===id;});
+      return {id:id,icon:food?food.icon:"",label:food?food.label:id,porciones:selected[id],cat:food?food.cat:""};
+    });
+    if(!items.length&&!agua&&!notes.trim()){return;}
+    var log = {
+      id: "food_"+fecha+"_"+meal+"_"+Date.now(),
+      date: fecha,
+      type: "food",
+      meal: meal,
+      label: MEALS.find(function(m){return m.id===meal;}).label,
+      items: items,
+      aguaVasos: agua,
+      notes: notes,
+      calories: null,
+      exercises: [],
+      notes: (items.map(function(i){return i.icon+" "+i.label+" (x"+i.porciones+")";}).join(", "))+(agua?" · 💧"+agua+" vasos":"")+(notes?" · "+notes:""),
+    };
+    // Guardar en logs
+    var nl = Object.assign({},log,{id:log.id});
+    setLogs(function(p){return [nl].concat(p);});
+    // Guardar en Supabase
+    if(sbUrl&&sbKey){
+      fetch(sbUrl+"/rest/v1/trainlog",{method:"POST",
+        headers:{"Content-Type":"application/json","apikey":sbKey,"Authorization":"Bearer "+sbKey,"Prefer":"resolution=merge-duplicates,return=minimal"},
+        body:JSON.stringify({
+          id:nl.id, date:nl.date, type:"food", label:nl.label,
+          duration:null, distance:null, notes:nl.notes,
+          data:JSON.stringify({meal:meal,items:items,aguaVasos:agua})
+        })
+      }).catch(function(){});
+    }
+    setSelected({});setNotes("");setAgua(0);setSaved(true);
+    setTimeout(function(){setSaved(false);},2000);
+  }
+
+  // Registros de comida de hoy
+  var registrosHoy = logs.filter(function(l){return l.type==="food"&&l.date===fecha;}).sort(function(a,b){
+    var order={desayuno:0,almuerzo:1,merienda:2,cena:3};
+    return (order[a.meal]||0)-(order[b.meal]||0);
+  });
+  var totalAguaHoy = registrosHoy.reduce(function(sum,l){
+    try{var d=typeof l.data==="string"?JSON.parse(l.data):l.data;return sum+(d&&d.aguaVasos||0);}catch{return sum;}
+  },0);
+
+  return <div>
+    {/* Selector de fecha */}
+    <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
+      <input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={{...st.inp,flex:1}}/>
+      <div style={{...st.card,margin:0,padding:"8px 12px",background:C.blueBg,borderColor:C.blue+"44",textAlign:"center",minWidth:80}}>
+        <div style={{fontSize:18}}>💧</div>
+        <div style={{fontSize:11,fontWeight:700,color:C.blue}}>{totalAguaHoy} vasos</div>
+        <div style={{fontSize:9,color:C.muted}}>{(totalAguaHoy*0.25).toFixed(1)}L hoy</div>
+      </div>
+    </div>
+
+    {/* Resumen del día */}
+    {registrosHoy.length>0&&<div style={{...st.card,marginBottom:14}}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>LO QUE COMISTE HOY</div>
+      {registrosHoy.map(function(r,i){
+        var mealInfo=MEALS.find(function(m){return m.id===r.meal;})||{icon:"🍽️",label:r.label};
+        var items=[];
+        try{
+          var d=typeof r.data==="string"?JSON.parse(r.data):r.data;
+          items=d&&d.items||[];
+        }catch{}
+        return <div key={r.id} style={{display:"flex",gap:10,padding:"8px 0",borderBottom:i<registrosHoy.length-1?"1px solid "+C.border:"none",alignItems:"flex-start"}}>
+          <span style={{fontSize:16,marginTop:1}}>{mealInfo.icon}</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.text}}>{mealInfo.label}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2,lineHeight:1.5}}>
+              {items.map(function(it){return it.icon+" "+it.label+(it.porciones!=="1"?" ×"+it.porciones:"");}).join("  ")}
+            </div>
+          </div>
+        </div>;
+      })}
+    </div>}
+
+    {/* Formulario nueva comida */}
+    <div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:12,fontWeight:700}}>REGISTRAR COMIDA</div>
+
+      {/* Selector de comida */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:16}}>
+        {MEALS.map(function(m){
+          var isActive=meal===m.id;
+          var yaReg=registrosHoy.some(function(r){return r.meal===m.id;});
+          return <button key={m.id} onClick={function(){setMeal(m.id);}} style={{background:isActive?C.accent:yaReg?C.accentBg:C.card2,border:"1px solid "+(isActive?C.accent:yaReg?C.accent+"44":C.border),borderRadius:10,padding:"8px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative"}}>
+            <span style={{fontSize:18}}>{m.icon}</span>
+            <span style={{fontSize:9,fontWeight:700,color:isActive?"#fff":yaReg?C.accent:C.muted}}>{m.label}</span>
+            {yaReg&&!isActive&&<span style={{position:"absolute",top:3,right:3,width:6,height:6,borderRadius:"50%",background:C.accent}}/>}
+          </button>;
+        })}
+      </div>
+
+      {/* Alimentos - tap para seleccionar, tap de nuevo para rotar porciones */}
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>¿QUÉ COMISTE? · tocá para agregar, volvé a tocar para cambiar porción</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:16}}>
+        {FOODS.map(function(f){
+          var sel=selected[f.id];
+          var isSelected=!!sel;
+          var catColors={proteína:C.green,carbos:C.blue,vegetal:"#2d8f4e",grasa:C.orange,bebida:C.purple,extra:C.danger};
+          var col=catColors[f.cat]||C.muted;
+          return <button key={f.id} onClick={function(){toggleFood(f.id);}} style={{background:isSelected?col+"22":C.card2,border:"2px solid "+(isSelected?col:C.border),borderRadius:10,padding:"8px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,position:"relative",transition:"all 0.15s"}}>
+            <span style={{fontSize:20}}>{f.icon}</span>
+            <span style={{fontSize:9,fontWeight:600,color:isSelected?col:C.muted,textAlign:"center",lineHeight:1.2}}>{f.label}</span>
+            {isSelected&&<span style={{position:"absolute",top:3,right:3,background:col,color:"#fff",borderRadius:4,fontSize:8,fontWeight:700,padding:"1px 4px"}}>{sel}</span>}
+          </button>;
+        })}
+      </div>
+
+      {/* Agua */}
+      <div style={{marginBottom:14}}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>AGUA / LÍQUIDOS (vasos de 250ml)</div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={function(){setAgua(function(a){return Math.max(0,a-1);});}} style={{width:36,height:36,borderRadius:"50%",border:"1px solid "+C.border,background:C.card2,fontSize:18,cursor:"pointer",fontWeight:700,color:C.muted}}>−</button>
+          <div style={{flex:1,textAlign:"center"}}>
+            <div style={{fontSize:28,fontWeight:800,color:agua>0?C.blue:C.muted,lineHeight:1}}>{agua}</div>
+            <div style={{fontSize:10,color:C.muted}}>{agua>0?(agua*0.25).toFixed(2)+"L":"sin agua"}</div>
+          </div>
+          <button onClick={function(){setAgua(function(a){return a+1;});}} style={{width:36,height:36,borderRadius:"50%",border:"1px solid "+C.blue,background:C.blueBg,fontSize:18,cursor:"pointer",fontWeight:700,color:C.blue}}>+</button>
+        </div>
+        {agua>0&&<div style={{display:"flex",justifyContent:"center",gap:4,marginTop:8,flexWrap:"wrap"}}>
+          {Array.from({length:Math.min(agua,12)},function(_,i){return <span key={i} style={{fontSize:16}}>💧</span>;  })}
+          {agua>12&&<span style={{fontSize:12,color:C.blue,fontWeight:700}}>+{agua-12}</span>}
+        </div>}
+      </div>
+
+      {/* Nota opcional */}
+      <div style={{marginBottom:14}}>
+        <label style={st.lbl}>NOTA (opcional)</label>
+        <input value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,fontSize:12}} placeholder="licuado de banana, tostadas con manteca de maní..."/>
+      </div>
+
+      {/* Preview de lo seleccionado */}
+      {Object.keys(selected).length>0&&<div style={{...st.card,background:C.accentBg,borderColor:C.accent+"44",padding:10,marginBottom:12}}>
+        <div style={{fontSize:11,color:C.accent,fontWeight:600,lineHeight:1.8}}>
+          {Object.keys(selected).map(function(id){
+            var f=FOODS.find(function(x){return x.id===id;});
+            return f?f.icon+" "+f.label+" ("+PORTION_LABEL[selected[id]]+")":"";
+          }).filter(Boolean).join("  ·  ")}
+        </div>
+      </div>}
+
+      <button onClick={guardar} disabled={!Object.keys(selected).length&&!agua} style={{...st.btn,opacity:(!Object.keys(selected).length&&!agua)?0.4:1,background:saved?C.green:C.accent}}>
+        {saved?"✅ GUARDADO":"GUARDAR "+MEALS.find(function(m){return m.id===meal;}).label.toUpperCase()}
+      </button>
+    </div>
+    <div style={{height:20}}/>
+  </div>;
+}
+
 // ── HELP ─────────────────────────────────────────────────────
 function Help(){
   var [sec,setSec]=useState(null);
@@ -2025,6 +2235,7 @@ function App(){
       {tab==="log"&&<LogWorkout routines={routines} addLog={addLog} initMode={logMode}/>}
       {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="charts"&&<Charts logs={logs}/>}
+      {tab==="food"&&<FoodLog logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="ai"&&<AIAssistant logs={logs} profile={profile} routines={routines} apiKey={apiKey} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="help"&&<Help/>}
       {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing} addLog={addLog} logs={logs}/>}
