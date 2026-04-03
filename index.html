@@ -164,13 +164,15 @@ function fmtDateLong(iso){
   return new Date(iso+"T12:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
 }
 function chipForType(type,actType){
-  if(type==="gym") return {label:"GYM",color:C.green,bg:C.greenBg};
-  if(type==="swimming") return {label:"🏊",color:C.blue,bg:C.blueBg};
+  // swimming puede venir como type directo o como activityType dentro de activity
+  if(type==="swimming"||actType==="swimming") return {label:"🏊",color:C.blue,bg:C.blueBg};
+  if(type==="gym") return {label:"💪🏋️",color:C.green,bg:C.greenBg};
   if(type==="home") return {label:"💪",color:C.purple,bg:C.purpleBg};
-  if(actType==="running") return {label:"🏃",color:C.orange,bg:C.orangeBg};
-  if(actType==="cycling") return {label:"🚴",color:C.orange,bg:C.orangeBg};
-  if(actType==="walking") return {label:"🚶",color:C.orange,bg:C.orangeBg};
-  return {label:(actType||"OTRA").toUpperCase().slice(0,4),color:C.orange,bg:C.orangeBg};
+  if(actType==="running"||type==="running") return {label:"🏃",color:C.orange,bg:C.orangeBg};
+  if(actType==="cycling"||type==="cycling") return {label:"🚴",color:C.orange,bg:C.orangeBg};
+  if(actType==="walking"||type==="walking") return {label:"🚶",color:C.muted,bg:C.card2};
+  if(type==="activity"&&!actType) return {label:"⚡",color:C.orange,bg:C.orangeBg};
+  return {label:"⚡",color:C.orange,bg:C.orangeBg};
 }
 function streak(logs){
   if(!logs.length) return 0;
@@ -653,16 +655,16 @@ function MiniCalendar({logs,nav}){
         var d=i+1;var iso=isoDay(yr,mo,d);
         var dl=logsByDate[iso]||[];
         var isToday=iso===today();
+        var hasSomething=dl.length>0;
         var hasSwim=dl.some(function(l){return l.type==="swimming";});
-        var hasGym=dl.some(function(l){return l.type==="gym";});
-        var hasAct=dl.some(function(l){return l.type==="activity"||l.type==="home";});
-        var hasSomething=hasSwim||hasGym||hasAct;
+        var hasHome=dl.some(function(l){return l.type==="home";});
+        var hasOther=dl.some(function(l){return l.type!=="swimming"&&l.type!=="home";});
         return <div key={d} style={{textAlign:"center",padding:"3px 1px",borderRadius:6,background:isToday?C.accent:hasSomething?C.accentBg:"transparent",border:isToday?"none":hasSomething?"1px solid "+C.accent+"33":"1px solid transparent"}}>
           <div style={{fontSize:10,fontWeight:isToday?700:hasSomething?600:400,color:isToday?"#fff":hasSomething?C.accent:C.muted,lineHeight:1.4}}>{d}</div>
           <div style={{display:"flex",justifyContent:"center",gap:1,minHeight:4}}>
             {hasSwim&&<div style={{width:3,height:3,borderRadius:"50%",background:isToday?"rgba(255,255,255,0.8)":C.blue}}/>}
-            {hasGym&&<div style={{width:3,height:3,borderRadius:"50%",background:isToday?"rgba(255,255,255,0.8)":C.green}}/>}
-            {hasAct&&!hasSwim&&!hasGym&&<div style={{width:3,height:3,borderRadius:"50%",background:isToday?"rgba(255,255,255,0.8)":C.orange}}/>}
+            {hasHome&&<div style={{width:3,height:3,borderRadius:"50%",background:isToday?"rgba(255,255,255,0.8)":C.purple}}/>}
+            {hasOther&&!hasSwim&&<div style={{width:3,height:3,borderRadius:"50%",background:isToday?"rgba(255,255,255,0.8)":C.orange}}/>}
           </div>
         </div>;
       })}
@@ -686,25 +688,26 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
   var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
   var tl = actLogs.find(function(l){return l.date===today();});
   var wl = actLogs.filter(function(l){return (new Date()-new Date(l.date+"T12:00:00"))/86400000<=7;});
-  var isGym = profile.modo !== "swimming";
-  // Pick relevant main routine based on mode
-  var gymRoutines = routines.filter(function(r){return r.type==="gym";});
+    // Foco en natación - modo único
   var swimRoutine = routines.find(function(r){return r.type==="swimming";});
   var homeRoutine = routines.find(function(r){return r.type==="home";});
-  var R = isGym ? gymRoutines[0] : swimRoutine;
-  var gl = actLogs.filter(function(l){return isGym?(l.type==="gym"):(l.type==="swimming");});
+  var R = swimRoutine;
+  var gl = actLogs.filter(function(l){return l.type==="swimming";});
   var li = gl[0]&&gl[0].routineDay!=null?gl[0].routineDay:-1;
-  var ni = R?(li+1)%R.days.length:0;
+  // Saltear calentamientos (índices 0 y 1) para próxima sesión
+  var allDays = R?R.days.length:6;
+  var ni = ((li+1)%allDays);
+  if(ni<2) ni=2;
   var nd = R&&R.days[ni];
   return <div>
-    <ModoSwitch profile={profile} setProfile={setProfile}/>
+
     {R&&<div style={{...st.card,background:DB[ni%4]||C.accentBg,borderColor:DC[ni%4]+"44",marginBottom:12}}>
       <div style={{color:DC[ni%4]||C.accent,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>{tl?"HOY YA ENTRENASTE ✓":"PRÓXIMO ENTRENAMIENTO"}</div>
       {tl
         ?<div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:28}}>✅</span><div><div style={{fontSize:14,fontWeight:700}}>{tl.label}</div><div style={{color:C.muted,fontSize:11}}>{tl.duration?tl.duration+" min":"Completado"}</div></div></div>
         :<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{nd&&nd.name}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>{nd&&nd.exercises.length} ejercicios · {nd&&nd.focus}</div></div>
-          <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"10px 14px"}} onClick={function(){nav("log", isGym?"gym":"swimming");}}>INICIAR →</button>
+          <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"10px 14px"}} onClick={function(){nav("log","swimming");}}>INICIAR →</button>
         </div>
       }
     </div>}
@@ -1142,20 +1145,19 @@ function Calendar({logs,onNavigate}){
           var dl=logsByDate[iso]||[];
           var isToday=iso===today();
           var isSel=iso===sel;
-          var hasGym=dl.some(function(l){return l.type==="gym";});
-          var hasAct=dl.some(function(l){return l.type==="activity";});
+          var types=[...new Set(dl.map(function(l){return l.type;}))];
           return <div key={d} onClick={function(){setSel(iso);}} style={{textAlign:"center",padding:"5px 2px",borderRadius:8,cursor:"pointer",background:isSel?C.accent:isToday?C.accentBg:"transparent",border:isToday&&!isSel?"1px solid "+C.accent+"44":"1px solid transparent"}}>
             <div style={{fontSize:12,fontWeight:isSel||isToday?700:400,color:isSel?"#fff":isToday?C.accent:C.text,lineHeight:1.4}}>{d}</div>
             <div style={{display:"flex",justifyContent:"center",gap:2,marginTop:2,minHeight:5}}>
-              {hasGym&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"#fff":C.green}}/>}
-              {hasAct&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"rgba(255,255,255,0.7)":C.blue}}/>}
+              {types.slice(0,3).map(function(t,ti){var ch=chipForType(t,"");return <div key={ti} style={{width:4,height:4,borderRadius:"50%",background:isSel?"rgba(255,255,255,0.8)":ch.color}}/>;  })}
             </div>
           </div>;
         })}
       </div>
-      <div style={{display:"flex",gap:12,marginTop:10,justifyContent:"center"}}>
-        <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:C.muted}}><span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block"}}/>Gym</span>
-        <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:C.muted}}><span style={{width:6,height:6,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>Actividad</span>
+      <div style={{display:"flex",gap:10,marginTop:10,justifyContent:"center",flexWrap:"wrap"}}>
+        <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:C.muted}}><span style={{width:6,height:6,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>Natación</span>
+        <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:C.muted}}><span style={{width:6,height:6,borderRadius:"50%",background:C.purple,display:"inline-block"}}/>Casa/Bandas</span>
+        <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:C.muted}}><span style={{width:6,height:6,borderRadius:"50%",background:C.orange,display:"inline-block"}}/>Otra</span>
       </div>
     </div>
     <div style={st.card}>
@@ -2037,6 +2039,17 @@ function Help(){
       "Con dolor ≥3 la app te avisa que consideres sesión suave o descanso.",
       "La natación es de bajo impacto — es el deporte más seguro para el ciático.",
       "Siempre hacé el calentamiento antes de entrar al agua.",
+    ]},
+    {id:"food",icon:"🍽️",title:"Registro de comidas y agua",content:[
+      "Encontrás el módulo en el menú ••• → Comidas & Agua.",
+      "Elegís la comida del día: Desayuno, Almuerzo, Merienda o Cena.",
+      "Tocás los alimentos que comiste — cada tap agrega 1 porción.",
+      "Volvé a tocar para cambiar a 2 porciones, otra vez para 3+ (abundante), y una más para quitar.",
+      "1 porción = lo que entra en una mano cerrada (un puñado, un huevo, una fruta).",
+      "2 porciones = plato normal. 3+ = comiste abundante de ese alimento.",
+      "Para comidas compuestas (licuado, guiso) usá la nota libre para describir.",
+      "El agua se carga con +/- en vasos de 250ml. 8 vasos = 2 litros diarios.",
+      "La IA cruza lo que comés con tu sueño y rendimiento en pileta para detectar patrones.",
     ]},
   ];
   return <div>
