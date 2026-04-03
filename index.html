@@ -519,6 +519,10 @@ function parseGarminSleep(text){
 function Chip({label,color,bg}){
   return <span style={{fontSize:9,color:color,background:bg,padding:"3px 8px",borderRadius:5,fontWeight:700,letterSpacing:1}}>{label}</span>;
 }
+function ChipLog({type,actType}){
+  var ch=chipForType(type,actType);
+  return <Chip label={ch.label} color={ch.color} bg={ch.bg}/>;
+}
 function Back({fn}){
   return <button onClick={fn} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:16,fontSize:13,fontWeight:600,padding:0}}>← volver</button>;
 }
@@ -742,7 +746,7 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
             <div style={{fontSize:13,fontWeight:700}}>{l.label}</div>
             <div style={{color:C.muted,fontSize:10,marginTop:2}}>{fmtDate(l.date)}{l.duration?" · "+l.duration+"min":""}{l.distance?" · "+l.distance+"km":""}</div>
           </div>
-          (function(){var _ch=chipForType(l.type,l.activityType);return <Chip label={_ch.label} color={_ch.color} bg={_ch.bg}/>;  })()
+          <ChipLog type={l.type} actType={l.activityType}/>
         </div>;
       })}
     </div>}
@@ -1105,7 +1109,7 @@ function History({logs,setLogs,sbUrl,sbKey}){
             <div style={{color:C.muted,fontSize:10,marginTop:3}}>{fmtDate(l.date)}{l.duration?" · "+l.duration+"min":""}{l.distance?" · "+l.distance+"km":""}</div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            (function(){var _ch=chipForType(l.type,l.activityType);return <Chip label={_ch.label} color={_ch.color} bg={_ch.bg}/>;  })()
+            <ChipLog type={l.type} actType={l.activityType}/>
             <button onClick={function(e){e.stopPropagation();setEditing(isEdit?null:l.id);setEx(null);}} style={{background:"none",border:"none",color:C.blue,cursor:"pointer",fontSize:12,padding:2,fontWeight:700}}>✏️</button>
             <button onClick={function(e){e.stopPropagation();del(l.id);}} style={{background:"none",border:"none",color:C.muted2,cursor:"pointer",fontSize:14,padding:2}}>✕</button>
           </div>
@@ -1196,7 +1200,7 @@ function Calendar({logs,onNavigate}){
         return <div key={i} style={{padding:"10px 0",borderBottom:i<selLogs.length-1?"1px solid "+C.border:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
             <div><div style={{fontSize:13,fontWeight:700}}>{l.label}</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}</div></div>
-            (function(){var _ch=chipForType(l.type,l.activityType);return <Chip label={_ch.label} color={_ch.color} bg={_ch.bg}/>;  })()
+            <ChipLog type={l.type} actType={l.activityType}/>
           </div>
           <LogDetail l={l}/>
         </div>;
