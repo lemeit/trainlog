@@ -58,7 +58,7 @@ const ls = {
 // ── SUPABASE ─────────────────────────────────────────────────
 async function sbUpsert(url,key,log){
   if(!url||!key) return;
-  var row = {id:log.id, secret:"tl_x7k9m2", date:log.date,type:log.type,label:log.label||"",
+  var row = {id:log.id,secret:"tl_x7k9m2",date:log.date,type:log.type,label:log.label||"",
     duration:log.duration||null,distance:log.distance||null,notes:log.notes||"",
     pre_energy:log.preEnergy||null,pre_pain:log.prePain||null,pre_note:log.preNote||"",
     post_energy:log.postEnergy||null,post_note:log.postNote||"",
@@ -81,7 +81,7 @@ async function sbDelete(url,key,id){
 async function sbFetch(url,key){
   if(!url||!key) return null;
   try{
-    var r = await fetch(url + "/rest/v1/trainlog?order=date.desc&limit=500&type=neq.config&secret=eq.tl_x7k9m2",
+    var r = await fetch(url+"/rest/v1/trainlog?order=date.desc&limit=500&type=neq.config",
       {headers:{"apikey":key,"Authorization":"Bearer "+key}});
     var d = await r.json();
     if(!Array.isArray(d)) return null;
@@ -2296,7 +2296,7 @@ function App(){
         if(remote){
           var remoteIds = new Set(remote.map(function(r){return r.id;}));
           prev.forEach(function(l){
-            if(!remoteIds.has(l.id)) sbUpsert(sbUrl,sbKey,l);
+            if(!remoteIds.has(l.id)) sbUpsert(sbUrl,sbKey,Object.assign({},l,{secret:"tl_x7k9m2"}));
           });
         }
         // Merge remote into local
