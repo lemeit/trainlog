@@ -62,7 +62,7 @@ async function sbUpsert(url,key,log){
     duration:log.duration||null,distance:log.distance||null,notes:log.notes||"",
     pre_energy:log.preEnergy||null,pre_pain:log.prePain||null,pre_note:log.preNote||"",
     post_energy:log.postEnergy||null,post_note:log.postNote||"",
-    data:JSON.stringify({routineId:log.routineId,routineDay:log.routineDay,activityType:log.activityType,exercises:log.exercises||[]})};
+    data:JSON.stringify({routineId:log.routineId,routineDay:log.routineDay,activityType:log.activityType,exercises:log.exercises||[],calories:log.calories,hrAvg:log.hrAvg,hrMax:log.hrMax,bodyBatDrop:log.bodyBatDrop,source:log.source})};
   try {
     var r = await fetch(url+"/rest/v1/trainlog",{method:"POST",
       headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+key,"Prefer":"resolution=merge-duplicates,return=minimal"},
@@ -86,14 +86,22 @@ async function sbFetch(url,key){
     var d = await r.json();
     if(!Array.isArray(d)) return null;
     return d.map(function(row){
-      var parsed = {};
-      try{parsed=JSON.parse(row.data||"{}");}catch{}
+      var p = {};
+      try{p=JSON.parse(row.data||"{}");}catch{}
       return {id:row.id,date:row.date,type:row.type,label:row.label,
         duration:row.duration,distance:row.distance,notes:row.notes,
         preEnergy:row.pre_energy,prePain:row.pre_pain,preNote:row.pre_note,
         postEnergy:row.post_energy,postNote:row.post_note,
-        routineId:parsed.routineId,routineDay:parsed.routineDay,
-        activityType:parsed.activityType,exercises:parsed.exercises||[]};
+        routineId:p.routineId,routineDay:p.routineDay,
+        activityType:p.activityType,exercises:p.exercises||[],
+        calories:p.calories,hrAvg:p.hrAvg,hrMax:p.hrMax,
+        bodyBatDrop:p.bodyBatDrop,source:p.source,
+        // sueño
+        sleepScore:p.sleepScore,hrRest:p.hrRest,bodyBatMorning:p.bodyBatMorning,
+        spo2:p.spo2,hrv:p.hrv,sleepQuality:p.sleepQuality,
+        // comida
+        meal:p.meal,items:p.items,aguaVasos:p.aguaVasos,
+      };
     });
   }catch{return null;}
 }
@@ -734,7 +742,7 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
             <div style={{fontSize:13,fontWeight:700}}>{l.label}</div>
             <div style={{color:C.muted,fontSize:10,marginTop:2}}>{fmtDate(l.date)}{l.duration?" · "+l.duration+"min":""}{l.distance?" · "+l.distance+"km":""}</div>
           </div>
-          <Chip label={l.type==="gym"?"GYM":l.type==="swimming"?"🏊":l.type==="home"?"💪":(l.activityType||"OTRA").toUpperCase().slice(0,4)} color={l.type==="gym"?C.green:l.type==="swimming"?C.blue:l.type==="home"?C.purple:C.orange} bg={l.type==="gym"?C.greenBg:l.type==="swimming"?C.blueBg:l.type==="home"?C.purpleBg:C.orangeBg}/>
+          (function(){var _ch=chipForType(l.type,l.activityType);return <Chip label={_ch.label} color={_ch.color} bg={_ch.bg}/>;  })()
         </div>;
       })}
     </div>}
@@ -1097,7 +1105,7 @@ function History({logs,setLogs,sbUrl,sbKey}){
             <div style={{color:C.muted,fontSize:10,marginTop:3}}>{fmtDate(l.date)}{l.duration?" · "+l.duration+"min":""}{l.distance?" · "+l.distance+"km":""}</div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <Chip label={l.type==="gym"?"GYM":l.type==="swimming"?"🏊":l.type==="home"?"💪":(l.activityType||"OTRA").toUpperCase().slice(0,4)} color={l.type==="gym"?C.green:l.type==="swimming"?C.blue:l.type==="home"?C.purple:C.orange} bg={l.type==="gym"?C.greenBg:l.type==="swimming"?C.blueBg:l.type==="home"?C.purpleBg:C.orangeBg}/>
+            (function(){var _ch=chipForType(l.type,l.activityType);return <Chip label={_ch.label} color={_ch.color} bg={_ch.bg}/>;  })()
             <button onClick={function(e){e.stopPropagation();setEditing(isEdit?null:l.id);setEx(null);}} style={{background:"none",border:"none",color:C.blue,cursor:"pointer",fontSize:12,padding:2,fontWeight:700}}>✏️</button>
             <button onClick={function(e){e.stopPropagation();del(l.id);}} style={{background:"none",border:"none",color:C.muted2,cursor:"pointer",fontSize:14,padding:2}}>✕</button>
           </div>
@@ -1172,7 +1180,7 @@ function Calendar({logs,onNavigate}){
             <div style={{fontSize:8,color:isSel?"rgba(255,255,255,0.7)":C.muted,fontWeight:700,marginBottom:2}}>{DAY_NAMES[d.getDay()]}</div>
             <div style={{fontSize:13,fontWeight:700,color:isSel?"#fff":isT?C.accent:C.text}}>{d.getDate()}</div>
             <div style={{marginTop:3,display:"flex",flexDirection:"column",gap:2,alignItems:"center"}}>
-              {dl.map(function(l,li){(function(){var ch=chipForType(l.type,l.activityType);return <div key={li} style={{fontSize:7,background:isSel?"rgba(255,255,255,0.25)":ch.bg,color:isSel?"#fff":ch.color,borderRadius:3,padding:"1px 3px",fontWeight:700,maxWidth:34,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ch.label}</div>;})()  })}
+              {dl.map(function(l,li){var ch=chipForType(l.type,l.activityType);return <div key={li} style={{fontSize:7,background:isSel?"rgba(255,255,255,0.25)":ch.bg,color:isSel?"#fff":ch.color,borderRadius:3,padding:"1px 3px",fontWeight:700,maxWidth:34,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ch.label}</div>;  })}
             </div>
           </div>;
         })}
@@ -1188,7 +1196,7 @@ function Calendar({logs,onNavigate}){
         return <div key={i} style={{padding:"10px 0",borderBottom:i<selLogs.length-1?"1px solid "+C.border:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
             <div><div style={{fontSize:13,fontWeight:700}}>{l.label}</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}</div></div>
-            <Chip label={l.type==="gym"?"GYM":l.type==="swimming"?"🏊":l.type==="home"?"💪":(l.activityType||"OTRA").toUpperCase().slice(0,4)} color={l.type==="gym"?C.green:l.type==="swimming"?C.blue:l.type==="home"?C.purple:C.orange} bg={l.type==="gym"?C.greenBg:l.type==="swimming"?C.blueBg:l.type==="home"?C.purpleBg:C.orangeBg}/>
+            (function(){var _ch=chipForType(l.type,l.activityType);return <Chip label={_ch.label} color={_ch.color} bg={_ch.bg}/>;  })()
           </div>
           <LogDetail l={l}/>
         </div>;
