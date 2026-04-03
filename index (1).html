@@ -1,0 +1,2000 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<meta name="theme-color" content="#f5f4f0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="TRAINLOG"/>
+<title>TRAINLOG</title>
+<script>
+var mf={name:"TRAINLOG",short_name:"TRAINLOG",start_url:"./",display:"standalone",background_color:"#f5f4f0",theme_color:"#1a7a4a",orientation:"portrait",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%231a7a4a'/%3E%3Ctext x='96' y='135' text-anchor='middle' font-size='120' fill='white'%3E%F0%9F%8F%8B%3C/text%3E%3C/svg%3E",sizes:"192x192",type:"image/svg+xml"}]};
+var b=new Blob([JSON.stringify(mf)],{type:"application/json"});
+var lk=document.createElement("link");lk.rel="manifest";lk.href=URL.createObjectURL(b);document.head.appendChild(lk);
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#f5f4f0;font-family:system-ui,-apple-system,sans-serif;color:#1a1a18;overscroll-behavior:none;-webkit-font-smoothing:antialiased}
+input,select,textarea,button{font-family:inherit}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="text/babel">
+const {useState,useEffect,useRef} = React;
+
+// ── THEME ────────────────────────────────────────────────────
+const C = {
+  bg:"#f5f4f0", card:"#ffffff", card2:"#f0efe9", border:"#e0ddd5",
+  accent:"#1a7a4a", accentBg:"#e8f5ee", text:"#1a1a18",
+  muted:"#888880", muted2:"#aaa9a0", danger:"#c0392b",
+  blue:"#1a5fa8", blueBg:"#e8f0fa",
+  orange:"#c96a00", orangeBg:"#fff0e0",
+  green:"#1a7a4a", greenBg:"#e8f5ee",
+  purple:"#6b3fba", purpleBg:"#f0eaff",
+};
+const DC = [C.green, C.blue, C.orange, C.purple];
+const DB = [C.greenBg, C.blueBg, C.orangeBg, C.purpleBg];
+const st = {
+  card:{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:16,marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"},
+  lbl:{color:C.muted,fontSize:9,textTransform:"uppercase",letterSpacing:2,marginBottom:5,display:"block",fontWeight:"700"},
+  inp:{background:"#faf9f7",border:"1px solid "+C.border,borderRadius:8,padding:"10px 12px",color:C.text,fontSize:13,width:"100%",boxSizing:"border-box",outline:"none"},
+  btn:{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"13px 22px",fontSize:13,fontWeight:"600",cursor:"pointer",display:"block",width:"100%",textAlign:"center"},
+  ghost:{background:"transparent",color:C.accent,border:"1px solid "+C.accent+"66",borderRadius:8,padding:"8px 14px",fontSize:11,cursor:"pointer",fontWeight:"600"},
+};
+
+// ── STORAGE ──────────────────────────────────────────────────
+const ls = {
+  g(k){try{var v=localStorage.getItem(k);return v?JSON.parse(v):null}catch{return null}},
+  s(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+};
+
+// ── SUPABASE ─────────────────────────────────────────────────
+async function sbUpsert(url,key,log){
+  if(!url||!key) return;
+  var row = {id:log.id,date:log.date,type:log.type,label:log.label||"",
+    duration:log.duration||null,distance:log.distance||null,notes:log.notes||"",
+    pre_energy:log.preEnergy||null,pre_pain:log.prePain||null,pre_note:log.preNote||"",
+    post_energy:log.postEnergy||null,post_note:log.postNote||"",
+    data:JSON.stringify({routineId:log.routineId,routineDay:log.routineDay,activityType:log.activityType,exercises:log.exercises||[]})};
+  try {
+    var r = await fetch(url+"/rest/v1/trainlog",{method:"POST",
+      headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+key,"Prefer":"resolution=merge-duplicates,return=minimal"},
+      body:JSON.stringify(row)});
+    if(!r.ok){
+      var err = await r.text();
+      console.error("Supabase upsert error:",r.status,err);
+    }
+  } catch(e){console.error("Supabase upsert exception:",e);}
+}
+async function sbDelete(url,key,id){
+  if(!url||!key) return;
+  await fetch(url+"/rest/v1/trainlog?id=eq."+id,{method:"DELETE",
+    headers:{"apikey":key,"Authorization":"Bearer "+key}}).catch(function(){});
+}
+async function sbFetch(url,key){
+  if(!url||!key) return null;
+  try{
+    var r = await fetch(url+"/rest/v1/trainlog?order=date.desc&limit=500&type=neq.config",
+      {headers:{"apikey":key,"Authorization":"Bearer "+key}});
+    var d = await r.json();
+    if(!Array.isArray(d)) return null;
+    return d.map(function(row){
+      var parsed = {};
+      try{parsed=JSON.parse(row.data||"{}");}catch{}
+      return {id:row.id,date:row.date,type:row.type,label:row.label,
+        duration:row.duration,distance:row.distance,notes:row.notes,
+        preEnergy:row.pre_energy,prePain:row.pre_pain,preNote:row.pre_note,
+        postEnergy:row.post_energy,postNote:row.post_note,
+        routineId:parsed.routineId,routineDay:parsed.routineDay,
+        activityType:parsed.activityType,exercises:parsed.exercises||[]};
+    });
+  }catch{return null;}
+}
+
+// ── SUPABASE CHAT ────────────────────────────────────────────
+async function sbSaveChat(url,key,msgs){
+  if(!url||!key) return;
+  await fetch(url+"/rest/v1/trainlog",{method:"POST",
+    headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+key,"Prefer":"resolution=merge-duplicates,return=minimal"},
+    body:JSON.stringify({id:"__ai_chat__",date:today(),type:"config",label:"ai_history",notes:"",data:JSON.stringify(msgs)})
+  }).catch(function(){});
+}
+async function sbLoadChat(url,key){
+  if(!url||!key) return null;
+  try{
+    var r = await fetch(url+"/rest/v1/trainlog?id=eq.__ai_chat__",
+      {headers:{"apikey":key,"Authorization":"Bearer "+key}});
+    var d = await r.json();
+    if(Array.isArray(d)&&d.length>0){return JSON.parse(d[0].data||"null");}
+  }catch{}
+  return null;
+}
+
+// ── GROQ API ─────────────────────────────────────────────────
+async function callGroq(key,sys,msgs){
+  var messages = [{role:"system",content:sys}].concat(
+    msgs.filter(function(m,i){return !(m.role==="assistant"&&i===0);})
+      .map(function(m){return {role:m.role,content:m.content};})
+  );
+  var r = await fetch("https://api.groq.com/openai/v1/chat/completions",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+    body:JSON.stringify({model:"llama-3.3-70b-versatile",messages:messages,max_tokens:1000,temperature:0.7})
+  });
+  var d = await r.json();
+  if(d.error) throw new Error(d.error.message||JSON.stringify(d.error));
+  return d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content||"Sin respuesta.";
+}
+
+// ── MARKDOWN RENDERER ─────────────────────────────────────────
+function renderMD(text){
+  if(!text) return "";
+  var t = text
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
+    .replace(/\*([^*]+?)\*/g,"<em>$1</em>")
+    .replace(/`([^`]+?)`/g,'<code style="background:#f0efe9;border-radius:3px;padding:1px 5px;font-size:12px;font-family:monospace">$1</code>')
+    .replace(/^### (.+)$/gm,'<div style="font-weight:700;font-size:14px;margin:10px 0 3px">$1</div>')
+    .replace(/^## (.+)$/gm,'<div style="font-weight:700;font-size:15px;margin:12px 0 4px">$1</div>')
+    .replace(/^# (.+)$/gm,'<div style="font-weight:700;font-size:16px;margin:14px 0 5px">$1</div>')
+    .replace(/^[\*\-] (.+)$/gm,'<li style="margin-bottom:3px;margin-left:16px">$1</li>')
+    .replace(/^\d+\. (.+)$/gm,'<li style="margin-bottom:3px;margin-left:16px">$1</li>')
+    .replace(/\n\n/g,"<br/><br/>")
+    .replace(/\n/g,"<br/>");
+  return t;
+}
+
+// ── UTILS ────────────────────────────────────────────────────
+function today(){
+  var d=new Date();
+  var local=new Date(d.getTime()-180*60000);
+  return local.toISOString().slice(0,10);
+}
+function fmtDate(iso){
+  return new Date(iso+"T12:00:00").toLocaleDateString("es-AR",{weekday:"short",day:"2-digit",month:"short"});
+}
+function fmtDateLong(iso){
+  return new Date(iso+"T12:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
+}
+function chipForType(type,actType){
+  if(type==="gym") return {label:"GYM",color:C.green,bg:C.greenBg};
+  if(type==="swimming") return {label:"🏊",color:C.blue,bg:C.blueBg};
+  if(type==="home") return {label:"💪",color:C.purple,bg:C.purpleBg};
+  if(actType==="running") return {label:"🏃",color:C.orange,bg:C.orangeBg};
+  if(actType==="cycling") return {label:"🚴",color:C.orange,bg:C.orangeBg};
+  if(actType==="walking") return {label:"🚶",color:C.orange,bg:C.orangeBg};
+  return {label:(actType||"OTRA").toUpperCase().slice(0,4),color:C.orange,bg:C.orangeBg};
+}
+function streak(logs){
+  if(!logs.length) return 0;
+  var dates = Array.from(new Set(logs.map(function(l){return l.date;}))).sort().reverse();
+  var s=0; var cur=new Date(); cur.setHours(12,0,0,0);
+  for(var i=0;i<dates.length;i++){
+    var dt=new Date(dates[i]+"T12:00:00");
+    if(Math.round((cur-dt)/86400000)<=1){s++;cur=dt;}else break;
+  }
+  return s;
+}
+function pad2(n){return String(n).padStart(2,"0");}
+function isoDay(y,m,d){return y+"-"+pad2(m+1)+"-"+pad2(d);}
+
+// ── ROUTINE DATA ─────────────────────────────────────────────
+var YT = "https://www.youtube.com/results?search_query=";
+var GTP = {id:"gym-to-pool",name:"Gym to Pool · Ciático Safe",type:"gym",days:[
+  {name:"Día 1 · Piernas & Core",focus:"Cuádriceps, Isquios, Core estable",exercises:[
+    {name:"Leg press horizontal",sets:4,reps:"10",note:"espalda apoyada siempre",video:YT+"leg+press+horizontal+tecnica"},
+    {name:"Aductores (máquina)",sets:4,reps:"12",note:"",video:YT+"aductores+maquina+tecnica"},
+    {name:"Abductores (máquina)",sets:3,reps:"15",note:"",video:YT+"abductores+maquina+tecnica"},
+    {name:"Curl femoral tumbado",sets:4,reps:"10-12",note:"reemplaza sillón isquios",video:YT+"curl+femoral+tumbado+tecnica"},
+    {name:"Sillón cuádriceps",sets:3,reps:"10",note:"",video:YT+"sillon+cuadriceps+maquina+tecnica"},
+    {name:"Gemelos sentado",sets:3,reps:"15",note:"sentado, no parado",video:YT+"gemelos+sentado+maquina+tecnica"},
+    {name:"Dead Bug",sets:3,reps:"12",note:"core seguro para ciático",video:YT+"dead+bug+bicho+muerto+core+lumbar+español"},
+    {name:"Plancha frontal",sets:3,reps:"45seg",note:"sin arquear cadera",video:YT+"plancha+abdominal+tecnica+correcta+español"},
+  ]},
+  {name:"Día 2 · Pecho, Bíceps & Bandas",focus:"Pectoral, Bíceps, Transferencia natación",exercises:[
+    {name:"Press pecho (máquina)",sets:4,reps:"8-10",note:"",video:YT+"press+pecho+maquina+tecnica"},
+    {name:"Apertura (máquina)",sets:4,reps:"10",note:"",video:YT+"apertura+pecho+maquina+tecnica"},
+    {name:"Fondos abierto",sets:3,reps:"10",note:"solo hasta 90° de codo",video:YT+"fondos+pecho+abierto+tecnica"},
+    {name:"Bíceps martillo sentado",sets:3,reps:"10",note:"siempre sentado",video:YT+"biceps+martillo+sentado+mancuernas"},
+    {name:"Bíceps curl barra W sentado",sets:4,reps:"8-10",note:"siempre sentado",video:YT+"curl+biceps+barra+w+sentado"},
+    {name:"Bíceps polea c/barra",sets:3,reps:"10",note:"",video:YT+"biceps+polea+barra+tecnica"},
+    {name:"\u{1F3CA} Crol con bandas (Taormina)",sets:10,reps:"1'15\"",note:"codo alto · empuje al muslo · 45seg descanso",video:YT+"simulacion+crol+banda+elastica+natacion+tierra"},
+  ]},
+  {name:"Día 3 · Espalda (motor natación)",focus:"Dorsal, Trapecio, transferencia al crol",exercises:[
+    {name:"Jalón al pecho",sets:4,reps:"10",note:"hacia pecho, nunca nuca",video:YT+"jalon+pecho+tecnica+natacion"},
+    {name:"Remo polea sentado (agarre neutro)",sets:3,reps:"10-12",note:"torso erguido siempre",video:YT+"remo+polea+sentado+agarre+neutro+tecnica"},
+    {name:"Pull over",sets:3,reps:"12",note:"ejercicio rey del nadador",video:YT+"pull+over+espalda+natacion+tecnica"},
+    {name:"Face pull en polea",sets:3,reps:"15",note:"reemplaza remo vertical",video:YT+"face+pull+polea+hombros+español"},
+    {name:"\u{1F3CA} Crol con bandas (Taormina)",sets:10,reps:"1'15\"",note:"foco fase de tirón · 45seg descanso",video:YT+"simulacion+brazada+crol+banda+elastica+seco"},
+  ]},
+  {name:"Día 4 · Hombros & Tríceps",focus:"Deltoides, Tríceps, Rotadores",exercises:[
+    {name:"Press militar (máquina)",sets:4,reps:"8-10",note:"sentado",video:YT+"press+militar+maquina+sentado+tecnica"},
+    {name:"Vuelos laterales sentado",sets:3,reps:"10",note:"nunca parado",video:YT+"vuelos+laterales+sentado+mancuernas+tecnica"},
+    {name:"Posteriores (máquina)",sets:4,reps:"10-12",note:"",video:YT+"deltoides+posterior+maquina+tecnica"},
+    {name:"Elevación frontal en polea",sets:3,reps:"10",note:"reemplaza vuelos frontales parado",video:YT+"elevacion+frontal+polea+hombros+tecnica"},
+    {name:"Patada tríceps con banda",sets:3,reps:"12",note:"por lado · torso inclinado recto",video:YT+"patada+triceps+banda+elastica+tecnica"},
+    {name:"Extensión tríceps polea",sets:3,reps:"10",note:"",video:YT+"extension+triceps+polea+tecnica"},
+    {name:"Fondos cerrados (máquina)",sets:3,reps:"10",note:"solo si no duele hombro",video:YT+"fondos+triceps+cerrados+maquina"},
+  ]},
+]};
+
+var DOIT = {id:"doit",name:"Do It Gym · Original",type:"gym",days:[
+  {name:"Día 1 · Piernas",focus:"Cuádriceps, Isquios, Glúteos",exercises:[
+    {name:"Prensa (pendular)",sets:4,reps:"8-10",note:"máquina"},{name:"Aductores",sets:4,reps:"12",note:"máquina"},
+    {name:"Sillón isquios",sets:4,reps:"10-12",note:"máquina"},{name:"Abductores",sets:3,reps:"12-15",note:"máquina"},
+    {name:"Sillón cuádriceps",sets:3,reps:"10",note:"máquina"},{name:"Gemelos",sets:3,reps:"10",note:""},
+    {name:"Lumbares + Abdominales",sets:3,reps:"15",note:"al final"},
+  ]},
+  {name:"Día 2 · Pecho & Bíceps",focus:"Pectoral, Bíceps",exercises:[
+    {name:"Press pecho (máq/polea)",sets:4,reps:"8-10",note:""},{name:"Apertura (máquina)",sets:4,reps:"10",note:""},
+    {name:"Fondos abierto",sets:3,reps:"10-12",note:""},{name:"Bíceps martillo",sets:3,reps:"10",note:"mancuernas"},
+    {name:"Bíceps curl barra W",sets:4,reps:"8-10",note:""},{name:"Bíceps (polea) c/barra",sets:3,reps:"10",note:""},
+  ]},
+  {name:"Día 3 · Espalda",focus:"Dorsal, Trapecio, Romboides",exercises:[
+    {name:"Jalón al pecho",sets:3,reps:"10",note:""},{name:"Remo bajo",sets:3,reps:"10-12",note:""},
+    {name:"Pull over",sets:3,reps:"12",note:""},{name:"Remo vertical",sets:3,reps:"10",note:""},
+  ]},
+  {name:"Día 4 · Hombros & Tríceps",focus:"Deltoides, Tríceps",exercises:[
+    {name:"Press militar (máquina)",sets:4,reps:"8-10",note:""},{name:"Vuelos laterales",sets:3,reps:"10",note:"mancuernas"},
+    {name:"Posteriores (máquina)",sets:4,reps:"10-12",note:""},{name:"Vuelos frontales",sets:3,reps:"10",note:"mancuernas"},
+    {name:"Extensión tríceps",sets:3,reps:"10",note:""},{name:"Fondos cerrados",sets:4,reps:"10-12",note:""},
+    {name:"Copa tríceps",sets:3,reps:"8-10",note:""},
+  ]},
+]};
+
+var CASA = {id:"casa-bandas",name:"Bandas en Casa",type:"home",days:[
+  {name:"Bloque A · Core & Lumbar",focus:"Colchoneta · 10 min · Protección ciático",exercises:[
+    {name:"Dead Bug",sets:3,reps:"10/lado",note:"espalda baja pegada al piso siempre",video:YT+"dead+bug+bicho+muerto+core+lumbar+español"},
+    {name:"Bird-Dog",sets:3,reps:"12/lado",note:"lento y controlado",video:YT+"bird+dog+core+estabilidad+español"},
+    {name:"Plancha frontal",sets:3,reps:"30-45seg",note:"sin elevar caderas",video:YT+"plancha+abdominal+tecnica+correcta+español"},
+    {name:"Plancha lateral",sets:2,reps:"20seg/lado",note:"rodilla apoyada si hay dolor",video:YT+"plancha+lateral+core+español"},
+    {name:"Puente de glúteo",sets:3,reps:"15",note:"pausa 2seg arriba",video:YT+"puente+gluteo+isometrico+español"},
+    {name:"Superman suave",sets:2,reps:"10",note:"elevar solo 5-10cm. Si duele ciático saltear",video:YT+"superman+extension+lumbar+suave+español"},
+  ]},
+  {name:"Bloque B · Brazada & Hombros",focus:"Banda de tubo anclada a puerta · 15 min",exercises:[
+    {name:"Jalón con banda (brazos extendidos)",sets:3,reps:"12",note:"simula fase de agarre del crol",video:YT+"jalon+banda+elastica+dorsal+natacion+seco"},
+    {name:"Simulación crol completo con banda",sets:3,reps:"10/lado",note:"agarre → tirón → empuje — el más importante",video:YT+"simulacion+crol+banda+elastica+natacion+tierra"},
+    {name:"Remo bajo con banda",sets:3,reps:"12",note:"torso recto, nunca flexionar columna",video:YT+"remo+bajo+banda+elastica+casa+español"},
+    {name:"Rotador externo codo 90°",sets:3,reps:"15/lado",note:"previene lesión de hombro en nadadores",video:YT+"rotador+externo+hombro+banda+elastica+natacion"},
+    {name:"Extensión tríceps con banda",sets:3,reps:"12",note:"empuje final de la brazada",video:YT+"extension+triceps+banda+elastica+casa+español"},
+    {name:"Face pull con banda",sets:3,reps:"15",note:"anclar arriba de la puerta, tirar hacia la cara separando manos",video:YT+"face+pull+banda+elastica+hombros+español"},
+  ]},
+  {name:"Bloque C · Piernas & Cadera",focus:"Mixto colchoneta + pie · 10 min",exercises:[
+    {name:"Sentadilla con banda (pisando)",sets:3,reps:"12",note:"pies al ancho de hombros, rodillas hacia afuera",video:YT+"sentadilla+banda+elastica+pisando+español"},
+    {name:"Abducción cadera de pie con banda",sets:3,reps:"15/lado",note:"banda en tobillos, pierna lateral",video:YT+"abduccion+cadera+banda+elastica+tobillo+español"},
+    {name:"Patada de glúteo con banda",sets:3,reps:"12/lado",note:"en cuadrupedia, banda en tobillo",video:YT+"patada+gluteo+cuadrupedia+banda+elastica"},
+    {name:"Estiramiento flexores de cadera",sets:2,reps:"40seg/lado",note:"rodilla en piso, cadera adelante",video:YT+"estiramiento+flexores+cadera+ciatico+español"},
+    {name:"Estiramiento piramidal",sets:2,reps:"45seg/lado",note:"siempre al final",video:YT+"estiramiento+piramidal+nervio+ciatico+final"},
+  ]},
+]};
+
+var NATACION = {id:"natacion",name:"Natación · Pileta 25m",type:"swimming",days:[
+  {name:"⚡ Calentamiento · Borde de pileta",focus:"3 min · De pie, sin equipamiento — justo antes de entrar al agua",exercises:[
+    {name:"Círculos de hombros hacia atrás",sets:1,reps:"10/brazo luego 10 juntos",note:"simula el recobro del crol",video:YT+"movilizacion+hombros+calentamiento+natacion"},
+    {name:"Rotación suave de cuello",sets:1,reps:"5/lado",note:"lento, sin brusquedad",video:YT+"rotacion+cuello+calentamiento+suave"},
+    {name:"Rotación de cadera con manos en cintura",sets:1,reps:"10 lentas",note:"activa el core",video:YT+"rotacion+cadera+calentamiento+pie"},
+    {name:"Rodilla al pecho parado",sets:1,reps:"5/lado · 3seg c/u",note:"estira piramidal sin agacharse — clave ciático",video:YT+"rodilla+pecho+parado+estiramiento+ciatico"},
+    {name:"Círculos de tobillos",sets:1,reps:"10/pie",note:"la patada del crol arranca desde el tobillo",video:YT+"movilizacion+tobillos+calentamiento+natacion"},
+    {name:"Inclinación lateral con brazo arriba",sets:1,reps:"5/lado",note:"moviliza la cadena lateral",video:YT+"inclinacion+lateral+calentamiento+natacion"},
+  ]},
+  {name:"⚡ Precalentamiento en casa · 15 min",focus:"Antes de ir a la pileta — activación sin fatiga",exercises:[
+    {name:"Gato-Camello",sets:2,reps:"10",note:"movilidad vertebral, nunca forzar",video:YT+"gato+camello+ejercicio+columna+espalda"},
+    {name:"Bird-Dog",sets:2,reps:"10/lado",note:"activa lumbar y glúteo — esencial ciático",video:YT+"bird+dog+ejercicio+lumbar+ciatico+español"},
+    {name:"Puente de glúteo",sets:2,reps:"15",note:"libera el piramidal",video:YT+"puente+gluteo+ejercicio+español"},
+    {name:"Rotación hombros con banda",sets:2,reps:"15/lado",note:"codo a 90°, banda anclada a puerta",video:YT+"rotacion+hombro+banda+elastica+natacion"},
+    {name:"Simulación brazada crol con banda",sets:2,reps:"10/lado",note:"torso inclinado, espalda recta",video:YT+"simulacion+brazada+crol+banda+elastica+seco+natacion"},
+    {name:"Estiramiento piramidal",sets:1,reps:"45seg/lado",note:"tumbado, cruce de pierna",video:YT+"estiramiento+piramidal+nervio+ciatico"},
+  ]},
+  {name:"Sesión A · Fondo suave",focus:"Sem 1-2 · 1400m · 45min",exercises:[
+    {name:"Entrada crol suave",sets:1,reps:"200m",note:"sin apuro, calentando",video:YT+"tecnica+crol+natacion+principiantes+español"},
+    {name:"Tabla — pateado crol",sets:4,reps:"50m",note:"agarre tabla, foco en patada de tobillo suelto",video:YT+"patada+crol+tabla+kickboard+tecnica+español"},
+    {name:"Pull buoy — brazada crol",sets:4,reps:"50m",note:"sin patada, foco en entrada de mano alta",video:YT+"pull+buoy+brazada+crol+tecnica+español"},
+    {name:"Fondo crol continuo",sets:1,reps:"400m",note:"ritmo medio, respiración bilateral cada 3",video:YT+"respiracion+bilateral+crol+tecnica+natacion"},
+    {name:"Espalda suave — vuelta calma",sets:1,reps:"200m",note:"muy suave, descompresión lumbar",video:YT+"tecnica+espalda+natacion+español+principiantes"},
+    {name:"Nado muy lento — respiración",sets:2,reps:"50m",note:"foco solo en respirar bien",video:YT+"respiracion+natacion+crol+tecnica+español"},
+  ]},
+  {name:"Sesión B · Técnica + accesorios",focus:"Sem 1-2 · 1400m · 50min",exercises:[
+    {name:"Entrada crol libre",sets:1,reps:"200m",note:"",video:YT+"crol+tecnica+completa+natacion+español"},
+    {name:"Crol con aletas",sets:4,reps:"50m",note:"foco en posición corporal horizontal",video:YT+"aletas+natacion+posicion+cuerpo+crol+tecnica"},
+    {name:"Manoplas + pull buoy — crol",sets:4,reps:"50m",note:"sentir el agarre del agua — combo Taormina",video:YT+"manoplas+pull+buoy+crol+agarre+agua+natacion"},
+    {name:"Series mixtas crol/espalda",sets:4,reps:"100m",note:"50m crol + 50m espalda · des. 30seg",video:YT+"series+crol+espalda+natacion+entrenamiento"},
+    {name:"Espalda muy suave",sets:1,reps:"200m",note:"vuelta a la calma",video:YT+"natacion+espalda+relajacion+vuelta+calma"},
+    {name:"Pateado espalda con tabla",sets:2,reps:"50m",note:"",video:YT+"patada+espalda+tabla+natacion+tecnica"},
+  ]},
+  {name:"Sesión C · Resistencia base",focus:"Sem 1-2 · 1600m · 55min",exercises:[
+    {name:"Entrada alternada crol/espalda",sets:4,reps:"50m",note:"",video:YT+"calentamiento+natacion+crol+espalda+alternado"},
+    {name:"Sprint pateado con tabla",sets:6,reps:"25m",note:"máxima velocidad · des. 20seg",video:YT+"sprint+patada+tabla+natacion+velocidad"},
+    {name:"Pull buoy crol continuo",sets:1,reps:"300m",note:"sin patada, brazada larga",video:YT+"pull+buoy+crol+fondo+natacion+entrenamiento"},
+    {name:"Series crol",sets:6,reps:"100m",note:"des. 30-40seg · ritmo cómodo",video:YT+"series+100m+crol+entrenamiento+natacion"},
+    {name:"Braza controlada",sets:4,reps:"50m",note:"patada amplia · si duele ciático cambiar por espalda",video:YT+"tecnica+braza+patada+suave+natacion+español"},
+    {name:"Espalda — vuelta calma",sets:1,reps:"150m",note:"muy suave",video:YT+"vuelta+calma+natacion+espalda+suave"},
+  ]},
+  {name:"Sesión D · Recuperación activa",focus:"4° día opcional · 1200m · 40min",exercises:[
+    {name:"Crol muy lento",sets:1,reps:"400m",note:"ritmo de calentamiento",video:YT+"crol+ritmo+lento+recuperacion+natacion"},
+    {name:"Pull buoy crol",sets:1,reps:"400m",note:"sin patada, foco en brazada",video:YT+"pull+buoy+crol+foco+brazada+entrenamiento"},
+    {name:"Espalda o mixto muy suave",sets:1,reps:"400m",note:"lo que pida el cuerpo",video:YT+"natacion+recuperacion+activa+suave+espalda"},
+  ]},
+]};
+
+var WU = [
+  {name:"Gato-Camello",reps:"2×10",note:"movilidad vertebral"},
+  {name:"Bird-Dog",reps:"3×12/lado",note:"antilesión ciático — esencial"},
+  {name:"Puente de glúteo",reps:"3×15",note:"libera el piramidal"},
+  {name:"Rotadores externos con banda",reps:"2×15",note:"previene hombro de nadador"},
+];
+var CD = [
+  {name:"Estiramiento piramidal",reps:"2 min/lado",note:"clave para ciático"},
+  {name:"Postura del niño",reps:"1 min",note:"descompresión lumbar"},
+  {name:"Estiramiento flexores de cadera",reps:"1 min/lado",note:""},
+  {name:"Foam roller glúteos e isquios",reps:"3 min",note:"no sobre punto de dolor agudo"},
+];
+
+// ── GARMIN CSV IMPORTER ───────────────────────────────────────
+function parseGarminCSV(text){
+  var lines = text.trim().split("\n");
+  if(lines.length<2) return [];
+  var headers = lines[0].split(",").map(function(h){return h.trim().replace(/^\uFEFF/,"");});
+  var idx = {};
+  headers.forEach(function(h,i){idx[h]=i;});
+  var TYPE_MAP = {
+    "Entreno de fuerza":"gym",
+    "Entrenamiento en cinta":"activity",
+    "Ciclismo en sala":"activity",
+    "Caminar":"activity",
+    "Carrera":"activity",
+    "Natación":"swimming","Natación en piscina":"swimming","Piscina":"swimming",
+    "Ciclismo":"activity",
+    "Senderismo":"activity",
+  };
+  var ACT_MAP = {
+    "Entrenamiento en cinta":"running",
+    "Ciclismo en sala":"cycling",
+    "Caminar":"walking",
+    "Carrera":"running",
+    "Natación":"swimming","Natación en piscina":"swimming","Piscina":"swimming","Natación en piscina":"swimming","Piscina":"swimming",
+    "Ciclismo":"cycling",
+    "Senderismo":"walking",
+  };
+  var results = [];
+  for(var i=1;i<lines.length;i++){
+    var line = lines[i].trim();
+    if(!line) continue;
+    // parse CSV respetando comas dentro de comillas
+    var cols = [];
+    var cur = ""; var inQ = false;
+    for(var c=0;c<line.length;c++){
+      var ch = line[c];
+      if(ch==='"'){inQ=!inQ;}
+      else if(ch===","&&!inQ){cols.push(cur.trim());cur="";}
+      else{cur+=ch;}
+    }
+    cols.push(cur.trim());
+    var g = function(name){return (cols[idx[name]]||"").replace(/"/g,"").trim();};
+    var tipo = g("Tipo de actividad");
+    var fechaStr = g("Fecha"); // "2026-03-31 16:36:48"
+    var fecha = fechaStr.slice(0,10);
+    var hora = fechaStr.slice(11,16);
+    var tipo_app = TYPE_MAP[tipo]||"activity";
+    var actType = ACT_MAP[tipo]||"other";
+    var titulo = g("Título")||tipo;
+    var cal = parseInt(g("Calorías").replace(/,/g,""))||null;
+    var dist = parseFloat(g("Distancia").replace(/,/g,""))||null;
+    // Tiempo "01:03:13" → minutos
+    var tiempoStr = g("Tiempo");
+    var durMin = null;
+    if(tiempoStr){
+      var tp = tiempoStr.split(":").map(Number);
+      if(tp.length>=2) durMin = Math.round(tp[0]*60+tp[1]+(tp[2]||0)/60);
+    }
+    var fcMedia = parseInt(g("Frecuencia cardiaca media"))||null;
+    var fcMax = parseInt(g("FC máxima"))||null;
+    var bodyBatDrop = parseInt(g("Descarga de Body Battery"))||null;
+    var repsTotal = parseInt(g("Repeticiones totales").replace(/,/g,""))||null;
+    var seriesTotal = parseInt(g("Series totales"))||null;
+    var pasos = parseInt(g("Pasos").replace(/,/g,""))||null;
+    var teAerobico = parseFloat(g("TE aeróbico"))||null;
+    // ID único basado en fecha+hora exacta para evitar duplicados
+    var uid = "garmin_"+fechaStr.replace(/[^0-9]/g,"");
+    var notes = [];
+    if(fcMedia) notes.push("FC media: "+fcMedia+" bpm");
+    if(fcMax) notes.push("FC máx: "+fcMax+" bpm");
+    if(bodyBatDrop) notes.push("Body Battery: -"+Math.abs(bodyBatDrop));
+    if(repsTotal) notes.push("Reps: "+repsTotal);
+    if(seriesTotal) notes.push("Series: "+seriesTotal);
+    if(pasos) notes.push("Pasos: "+pasos.toLocaleString());
+    if(teAerobico) notes.push("TE aeróbico: "+teAerobico);
+    if(cal) notes.push("Calorías: "+cal+" kcal");
+    results.push({
+      id: uid,
+      date: fecha,
+      hora: hora,
+      type: tipo_app,
+      activityType: actType,
+      label: titulo,
+      duration: durMin,
+      distance: dist&&dist>0?dist:null,
+      calories: cal,
+      hrAvg: fcMedia,
+      hrMax: fcMax,
+      bodyBatDrop: bodyBatDrop,
+      repsTotal: repsTotal,
+      seriesTotal: seriesTotal,
+      steps: pasos,
+      teAerobico: teAerobico,
+      notes: notes.join(" · "),
+      source: "garmin",
+      exercises:[],
+    });
+  }
+  return results;
+}
+
+// ── GARMIN SLEEP CSV PARSER ──────────────────────────────────
+function parseGarminSleep(text){
+  var lines = text.trim().split("\n");
+  if(lines.length<2) return [];
+  // El CSV de sueño de Garmin tiene headers con nombres largos
+  // La fecha siempre está en la primera columna (cols[0])
+  var headers = lines[0].split(",").map(function(h){return h.trim().replace(/^\uFEFF/,"").replace(/"/g,"");});
+  var idx = {};
+  headers.forEach(function(h,i){idx[h]=i;});
+  var results = [];
+  for(var i=1;i<lines.length;i++){
+    var line = lines[i].trim();
+    if(!line) continue;
+    var cols = line.split(",").map(function(c){return c.trim().replace(/"/g,"");});
+    var g = function(name){
+      var i = idx[name];
+      return i!=null?(cols[i]||"").trim():"";
+    };
+    // Fecha siempre en cols[0]
+    var fecha = cols[0].trim().replace(/"/g,"");
+    if(!fecha||!fecha.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
+    var score = parseInt(g("Puntuación"))||null;
+    var hrRest = parseInt(g("Frecuencia cardiaca en reposo"))||null;
+    var bodyBat = parseInt(g("Body Battery"))||null;
+    var spo2 = parseFloat(g("Pulsioximetría"))||null;
+    var breath = parseFloat(g("Respiración"))||null;
+    var hrv = parseInt(g("Estado de VFC"))||null;
+    var calidad = g("Calidad")||null;
+    var necesidad = g("Necesidad de sueño")||null;
+    var horaDormir = g("Hora de dormir")||null;
+    var horaDespertar = g("Hora de despertarte")||null;
+    var durStr = g("Duración")||"";
+    var durMin = null;
+    var mH = durStr.match(/(\d+)h/); var mM = durStr.match(/(\d+)min/);
+    if(mH||mM) durMin = (mH?parseInt(mH[1])*60:0)+(mM?parseInt(mM[1]):0);
+    var notes = [];
+    if(calidad) notes.push("Calidad: "+calidad);
+    if(hrRest) notes.push("FC reposo: "+hrRest+" bpm");
+    if(spo2) notes.push("SpO2: "+spo2+"%");
+    if(hrv) notes.push("HRV: "+hrv);
+    if(breath) notes.push("Resp: "+breath+" rpm");
+    if(horaDormir) notes.push("Durmió: "+horaDormir);
+    if(horaDespertar) notes.push("Despertó: "+horaDespertar);
+    if(necesidad) notes.push("Necesidad: "+necesidad);
+    results.push({
+      id:"sleep_"+fecha,
+      date:fecha,
+      type:"sleep",
+      label:"Sueño",
+      duration:durMin,
+      calories:null,
+      sleepScore:score,
+      hrRest:hrRest,
+      bodyBatMorning:bodyBat,
+      spo2:spo2,
+      breath:breath,
+      hrv:hrv,
+      sleepQuality:calidad,
+      sleepNeed:necesidad,
+      bedTime:horaDormir,
+      wakeTime:horaDespertar,
+      notes:notes.join(" · "),
+      source:"garmin_sleep",
+      exercises:[],
+    });
+  }
+  return results;
+}
+
+
+function Chip({label,color,bg}){
+  return <span style={{fontSize:9,color:color,background:bg,padding:"3px 8px",borderRadius:5,fontWeight:700,letterSpacing:1}}>{label}</span>;
+}
+function Back({fn}){
+  return <button onClick={fn} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:16,fontSize:13,fontWeight:600,padding:0}}>← volver</button>;
+}
+function VidBtn({url}){
+  if(!url) return null;
+  return <a href={url} target="_blank" rel="noopener noreferrer" style={{background:C.blueBg,color:C.blue,border:"1px solid "+C.blue+"33",borderRadius:6,padding:"4px 9px",fontSize:9,fontWeight:700,textDecoration:"none",whiteSpace:"nowrap",marginLeft:8,flexShrink:0}}>▶ VER</a>;
+}
+
+// ── HEADER ───────────────────────────────────────────────────
+var TAB_NAMES = {dashboard:"Inicio",cal:"Calendario",log:"Registrar",history:"Historial",charts:"Gráficos",ai:"Asistente IA",settings:"Configuración",help:"Ayuda"};
+function Header({profile,tab}){
+  return <div style={{padding:"16px 16px 12px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:C.bg,zIndex:50}}>
+    <div>
+      <div style={{color:C.accent,fontSize:20,fontWeight:800,letterSpacing:3}}>TRAINLOG</div>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginTop:2,fontWeight:700}}>{TAB_NAMES[tab]||""}</div>
+    </div>
+    <div style={{textAlign:"right"}}>
+      <div style={{fontSize:13,fontWeight:700}}>{profile.name||"Atleta"}</div>
+      <div style={{color:C.muted,fontSize:10}}>{today()}</div>
+    </div>
+  </div>;
+}
+
+// ── NAV ──────────────────────────────────────────────────────
+var NAV_MAIN=[{id:"dashboard",icon:"⚡",label:"Inicio"},{id:"log",icon:"＋",label:"Reg."},{id:"ai",icon:"🤖",label:"IA"},{id:"settings",icon:"⚙️",label:"Config."}];
+var NAV_MORE=[{id:"cal",icon:"📅",label:"Calendario"},{id:"history",icon:"📊",label:"Historial"},{id:"charts",icon:"📈",label:"Gráficos"},{id:"help",icon:"❓",label:"Ayuda"}];
+function Nav({tab,set}){
+  var [showMore,setShowMore]=useState(false);
+  var inMore=NAV_MORE.some(function(n){return n.id===tab;});
+  return <div>
+    {showMore&&<div onClick={function(){setShowMore(false);}} style={{position:"fixed",inset:0,zIndex:98}}/>}
+    {showMore&&<div style={{position:"fixed",bottom:60,left:"50%",transform:"translateX(-50%)",width:"min(480px,100%)",background:"#fff",borderTop:"1px solid "+C.border,borderRadius:"12px 12px 0 0",zIndex:99,padding:"8px 0 4px",boxShadow:"0 -4px 20px rgba(0,0,0,0.1)"}}>
+      <div style={{display:"flex",padding:"0 8px",gap:4}}>
+        {NAV_MORE.map(function(n){
+          var isActive=tab===n.id;
+          return <button key={n.id} onClick={function(){set(n.id);setShowMore(false);}} style={{flex:1,background:isActive?C.accentBg:"none",border:"none",borderRadius:10,padding:"10px 4px",cursor:"pointer",color:isActive?C.accent:C.muted,fontSize:9,display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontWeight:700}}>
+            <span style={{fontSize:18}}>{n.icon}</span>
+            <span>{n.label}</span>
+          </button>;
+        })}
+      </div>
+    </div>}
+    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"min(480px,100%)",background:"#fff",borderTop:"1px solid "+C.border,display:"flex",zIndex:100}}>
+      {NAV_MAIN.map(function(n){
+        var isLog=n.id==="log";var isActive=tab===n.id;
+        return <button key={n.id} onClick={function(){set(n.id);setShowMore(false);}} style={{flex:1,background:isLog?(isActive?C.accent:C.accentBg):"none",border:"none",padding:"9px 2px 10px",cursor:"pointer",color:isLog?(isActive?"#fff":C.accent):(isActive?C.accent:C.muted),fontSize:9,display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontWeight:700,borderTop:isActive&&!isLog?"2px solid "+C.accent:"2px solid transparent"}}>
+          <span style={{fontSize:isLog?20:17}}>{n.icon}</span>
+          <span>{n.label}</span>
+        </button>;
+      })}
+      <button onClick={function(){setShowMore(!showMore);}} style={{flex:1,background:"none",border:"none",padding:"9px 2px 10px",cursor:"pointer",color:(inMore||showMore)?C.accent:C.muted,fontSize:9,display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontWeight:700,borderTop:(inMore||showMore)?"2px solid "+C.accent:"2px solid transparent"}}>
+        <span style={{fontSize:17}}>•••</span>
+        <span>Más</span>
+      </button>
+    </div>
+  </div>;
+}
+
+// ── ESTADO FORM ───────────────────────────────────────────────
+function EmojiBtn({val,cur,set,emoji,label}){
+  return <button onClick={function(){set(val);}} style={{flex:1,background:cur===val?C.accentBg:"#faf9f7",border:"1px solid "+(cur===val?C.accent:C.border),borderRadius:8,padding:"8px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+    <span style={{fontSize:18}}>{emoji}</span>
+    <span style={{fontSize:8,color:cur===val?C.accent:C.muted,fontWeight:700}}>{label}</span>
+  </button>;
+}
+var PAIN_COLORS = ["#e8f5ee","#fff9e0","#fff0d0","#ffe0d0","#ffd0d0","#ffb0b0"];
+var PAIN_TEXT = ["#1a7a4a","#b8860b","#c96a00","#c0392b","#a00000","#800000"];
+function PainBtn({val,cur,set}){
+  return <button onClick={function(){set(val);}} style={{flex:1,background:cur===val?PAIN_COLORS[val]:"#faf9f7",border:"1px solid "+(cur===val?PAIN_TEXT[val]:C.border),borderRadius:8,padding:"8px 4px",cursor:"pointer"}}>
+    <span style={{fontSize:13,fontWeight:700,color:cur===val?PAIN_TEXT[val]:C.muted}}>{val}</span>
+  </button>;
+}
+var ENERGIAS_PRE = [[1,"😴","Agotado"],[2,"😐","Regular"],[3,"🙂","Bien"],[4,"💪","Muy bien"],[5,"🔥","Top"]];
+var ENERGIAS_POST = [[1,"😴","Destruido"],[2,"😐","Cansado"],[3,"🙂","Bien"],[4,"💪","Cargado"],[5,"🔥","Excelente"]];
+function EstadoForm({preE,setPreE,pain,setPain,preN,setPreN,postE,setPostE,postN,setPostN}){
+  var [open,setOpen] = useState(false);
+  return <div style={{...st.card,background:"#f8f6ff",borderColor:C.purple+"33",marginBottom:12}}>
+    <button onClick={function(){setOpen(!open);}} style={{background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
+      <div>
+        <div style={{fontSize:12,fontWeight:700,color:C.purple}}>📋 Estado físico</div>
+        <div style={{fontSize:10,color:C.muted,marginTop:2}}>¿Cómo lllegás y cómo salís? La IA analiza estos datos</div>
+      </div>
+      <span style={{color:C.purple,fontSize:14}}>{open?"▲":"▼"}</span>
+    </button>
+    {open&&<div style={{marginTop:14}}>
+      <div style={{marginBottom:12}}>
+        <label style={{...st.lbl,color:C.purple}}>ENERGÍA AL LLEGAR</label>
+        <div style={{display:"flex",gap:5}}>
+          {ENERGIAS_PRE.map(function(e){return <EmojiBtn key={e[0]} val={e[0]} cur={preE} set={setPreE} emoji={e[1]} label={e[2]}/>;  })}
+        </div>
+      </div>
+      <div style={{marginBottom:12}}>
+        <label style={{...st.lbl,color:C.danger}}>DOLOR CIÁTICO AL LLEGAR (0 = ninguno)</label>
+        <div style={{display:"flex",gap:4}}>
+          {[0,1,2,3,4,5].map(function(v){return <PainBtn key={v} val={v} cur={pain} set={setPain}/>;  })}
+        </div>
+        {pain>=3&&<div style={{color:C.danger,fontSize:10,marginTop:5,fontWeight:600}}>⚠️ Con dolor ≥3 considerá sesión suave o descanso</div>}
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={st.lbl}>NOTA PREVIA (opcional)</label>
+        <input value={preN} onChange={function(e){setPreN(e.target.value);}} style={{...st.inp,fontSize:12}} placeholder="Dormí mal, estrés, tensión lumbar..."/>
+      </div>
+      <div style={{borderTop:"1px solid "+C.border,paddingTop:12}}>
+        <div style={{fontSize:10,color:C.muted,marginBottom:10,fontWeight:600}}>— COMPLETAR AL TERMINAR —</div>
+        <div style={{marginBottom:12}}>
+          <label style={{...st.lbl,color:C.green}}>ENERGÍA AL SALIR</label>
+          <div style={{display:"flex",gap:5}}>
+            {ENERGIAS_POST.map(function(e){return <EmojiBtn key={e[0]} val={e[0]} cur={postE} set={setPostE} emoji={e[1]} label={e[2]}/>;  })}
+          </div>
+        </div>
+        <div>
+          <label style={st.lbl}>NOTA FINAL (opcional)</label>
+          <input value={postN} onChange={function(e){setPostN(e.target.value);}} style={{...st.inp,fontSize:12}} placeholder="Ciático tranquilo, hombro molestó, muy bien..."/>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────
+function ModoSwitch({profile,setProfile}){
+  var iGym = profile.modo!=="swimming";
+  return <div style={{display:"flex",background:C.card2,borderRadius:20,padding:3,marginBottom:14,border:"1px solid "+C.border}}>
+    {[["gym","🏋️ Modo Gym"],["swimming","🏊 Modo Pileta"]].map(function(x){
+      var active = (x[0]==="gym"&&iGym)||(x[0]==="swimming"&&!iGym);
+      return <button key={x[0]} onClick={function(){setProfile(function(p){return Object.assign({},p,{modo:x[0]});});}} style={{flex:1,background:active?C.accent:"transparent",color:active?"#fff":C.muted,border:"none",borderRadius:17,padding:"8px 6px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all 0.15s"}}>{x[1]}</button>;
+    })}
+  </div>;
+}
+
+function Dashboard({logs,routines,profile,setProfile,nav}){
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+  var tl = actLogs.find(function(l){return l.date===today();});
+  var wl = actLogs.filter(function(l){return (new Date()-new Date(l.date+"T12:00:00"))/86400000<=7;});
+  var isGym = profile.modo !== "swimming";
+  // Pick relevant main routine based on mode
+  var gymRoutines = routines.filter(function(r){return r.type==="gym";});
+  var swimRoutine = routines.find(function(r){return r.type==="swimming";});
+  var homeRoutine = routines.find(function(r){return r.type==="home";});
+  var R = isGym ? gymRoutines[0] : swimRoutine;
+  var gl = actLogs.filter(function(l){return isGym?(l.type==="gym"):(l.type==="swimming");});
+  var li = gl[0]&&gl[0].routineDay!=null?gl[0].routineDay:-1;
+  var ni = R?(li+1)%R.days.length:0;
+  var nd = R&&R.days[ni];
+  return <div>
+    <ModoSwitch profile={profile} setProfile={setProfile}/>
+    {R&&<div style={{...st.card,background:DB[ni%4]||C.accentBg,borderColor:DC[ni%4]+"44",marginBottom:12}}>
+      <div style={{color:DC[ni%4]||C.accent,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>{tl?"HOY YA ENTRENASTE ✓":"PRÓXIMO ENTRENAMIENTO"}</div>
+      {tl
+        ?<div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:28}}>✅</span><div><div style={{fontSize:14,fontWeight:700}}>{tl.label}</div><div style={{color:C.muted,fontSize:11}}>{tl.duration?tl.duration+" min":"Completado"}</div></div></div>
+        :<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{nd&&nd.name}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>{nd&&nd.exercises.length} ejercicios · {nd&&nd.focus}</div></div>
+          <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"10px 14px"}} onClick={function(){nav("log", isGym?"gym":"swimming");}}>INICIAR →</button>
+        </div>
+      }
+    </div>}
+    {homeRoutine&&<div style={{...st.card,background:C.purpleBg,borderColor:C.purple+"44",marginBottom:12}}>
+      <div style={{color:C.purple,fontSize:9,letterSpacing:2,marginBottom:6,fontWeight:700}}>💪 BANDAS EN CASA · {homeRoutine.days.length} BLOQUES</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{color:C.muted,fontSize:11}}>{homeRoutine.days.map(function(d){return d.name.split("·")[0].trim();}).join(" · ")}</div>
+        <button style={{...st.ghost,borderColor:C.purple+"55",color:C.purple,fontSize:9,padding:"6px 10px"}} onClick={function(){nav("log","home");}}>REGISTRAR</button>
+      </div>
+    </div>}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+      {[{v:wl.length,u:"esta semana"},{v:actLogs.length,u:"total"},{v:streak(actLogs),u:"racha días"}].map(function(x,i){
+        return <div key={i} style={{...st.card,textAlign:"center",padding:"14px 8px"}}>
+          <div style={{color:C.accent,fontSize:26,fontWeight:800,lineHeight:1}}>{x.v}</div>
+          <div style={{color:C.muted,fontSize:9,marginTop:5,fontWeight:700}}>{x.u}</div>
+        </div>;
+      })}
+    </div>
+    {actLogs.slice(0,5).length>0&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>ACTIVIDAD RECIENTE</div>
+      {actLogs.slice(0,5).map(function(l,i){
+        return <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:i<4?"1px solid "+C.border:"none"}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:700}}>{l.label}</div>
+            <div style={{color:C.muted,fontSize:10,marginTop:2}}>{fmtDate(l.date)}{l.duration?" · "+l.duration+"min":""}{l.distance?" · "+l.distance+"km":""}</div>
+          </div>
+          <Chip label={l.type==="gym"?"GYM":l.type==="swimming"?"🏊":l.type==="home"?"💪":(l.activityType||"OTRA").toUpperCase().slice(0,4)} color={l.type==="gym"?C.green:l.type==="swimming"?C.blue:l.type==="home"?C.purple:C.orange} bg={l.type==="gym"?C.greenBg:l.type==="swimming"?C.blueBg:l.type==="home"?C.purpleBg:C.orangeBg}/>
+        </div>;
+      })}
+    </div>}
+    {!actLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"50px 20px"}}>
+      <div style={{fontSize:42,marginBottom:12}}>🏋️</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.text}}>Todavía no hay registros</div>
+      <div style={{fontSize:12,marginTop:6}}>¡Empezá tu primer entrenamiento!</div>
+    </div>}
+  </div>;
+}
+
+// ── ROUTINES ─────────────────────────────────────────────────
+function Routines({routines}){
+  var [op,setOp] = useState(null);
+  var [wu,setWu] = useState(false);
+  var TYPE_LABEL = {gym:"Musculación", swimming:"Natación", home:"Bandas en casa"};
+  var GROUPS = [
+    {key:"gym", label:"🏋️ GIMNASIO", color:C.green},
+    {key:"swimming", label:"🏊 NATACIÓN · PILETA", color:C.blue},
+    {key:"home", label:"💪 BANDAS EN CASA", color:C.purple},
+  ];
+  return <div>
+    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:14,fontWeight:700}}>MIS RUTINAS ({routines.length})</div>
+    <div style={{...st.card,background:C.orangeBg,borderColor:C.orange+"55"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div><div style={{fontSize:13,fontWeight:700,color:C.orange}}>⚡ Calentamiento gym · Todos los días</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>15 min · Obligatorio para ciático</div></div>
+        <button onClick={function(){setWu(!wu);}} style={{...st.ghost,borderColor:C.orange+"55",color:C.orange,fontSize:10}}>{wu?"CERRAR":"VER"}</button>
+      </div>
+      {wu&&<div style={{marginTop:14}}>
+        <div style={{color:C.orange,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>CALENTAMIENTO</div>
+        {WU.map(function(x,i){return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid "+C.border,fontSize:12}}><span>{x.name}{x.note?<span style={{color:C.muted}}> · {x.note}</span>:""}</span><span style={{color:C.orange,fontWeight:700,minWidth:70,textAlign:"right"}}>{x.reps}</span></div>;})}
+        <div style={{color:C.blue,fontSize:9,letterSpacing:2,margin:"14px 0 8px",fontWeight:700}}>VUELTA A LA CALMA</div>
+        {CD.map(function(x,i){return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid "+C.border,fontSize:12}}><span>{x.name}{x.note?<span style={{color:C.muted}}> · {x.note}</span>:""}</span><span style={{color:C.blue,fontWeight:700,minWidth:70,textAlign:"right"}}>{x.reps}</span></div>;})}
+      </div>}
+    </div>
+    {GROUPS.map(function(g){
+      var gr = routines.filter(function(r){return r.type===g.key;});
+      if(!gr.length) return null;
+      return <div key={g.key}>
+        <div style={{color:g.color,fontSize:9,letterSpacing:2,fontWeight:700,marginBottom:8,marginTop:6}}>{g.label}</div>
+        {gr.map(function(r){
+          var isOpen = op===r.id;
+          return <div key={r.id} style={st.card}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div><div style={{fontSize:14,fontWeight:700}}>{r.name}</div><div style={{color:C.muted,fontSize:10,marginTop:3}}>{r.days.length} bloques · {TYPE_LABEL[r.type]||r.type}</div></div>
+              <button onClick={function(){setOp(isOpen?null:r.id);}} style={st.ghost}>{isOpen?"CERRAR":"VER"}</button>
+            </div>
+            {isOpen&&<div style={{marginTop:14}}>
+              {r.days.map(function(d,di){
+                return <div key={di} style={{background:DB[di%4]||C.accentBg,borderRadius:10,padding:12,marginBottom:8,borderLeft:"3px solid "+(DC[di%4]||C.accent)}}>
+                  <div style={{color:DC[di%4]||C.accent,fontSize:11,fontWeight:700,marginBottom:4}}>{d.name}</div>
+                  <div style={{color:C.muted,fontSize:9,marginBottom:10,fontWeight:600}}>{d.focus}</div>
+                  {d.exercises.map(function(ex,ei){
+                    return <div key={ei} style={{padding:"5px 0",borderBottom:"1px solid "+C.border+"88",fontSize:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{flex:1}}>{ex.name}{ex.note?<span style={{color:C.muted,fontSize:10}}> · {ex.note}</span>:""}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                          <span style={{color:DC[di%4]||C.accent,fontWeight:700,fontSize:11}}>{ex.sets}x{ex.reps}</span>
+                          <VidBtn url={ex.video}/>
+                        </div>
+                      </div>
+                    </div>;
+                  })}
+                </div>;
+              })}
+            </div>}
+          </div>;
+        })}
+      </div>;
+    })}
+  </div>;
+}
+
+
+// ── LOG WORKOUT ───────────────────────────────────────────────
+function LogWorkout({routines,addLog,initMode}){
+  var [mode,setMode] = useState(initMode||null);
+  var [sr,setSr] = useState(routines[0]&&routines[0].id||"");
+  var [sd,setSd] = useState(0);
+  var [sets,setSets] = useState({});
+  var [dur,setDur] = useState("");
+  var [notes,setNotes] = useState("");
+  var [at,setAt] = useState("running");
+  var [dist,setDist] = useState("");
+  var [fecha,setFecha] = useState(today());
+  var [done,setDone] = useState(false);
+  var [preE,setPreE] = useState(3);
+  var [pain,setPain] = useState(0);
+  var [preN,setPreN] = useState("");
+  var [postE,setPostE] = useState(3);
+  var [postN,setPostN] = useState("");
+  var R = routines.find(function(r){return r.id===sr;});
+  var D = R&&R.days[sd];
+  useEffect(function(){
+    if(!D) return;
+    var o = {};
+    D.exercises.forEach(function(ex,i){o[i]=Array.from({length:ex.sets||3},function(){return {reps:"",weight:""};});});
+    setSets(o);
+  },[sd,sr]);
+  function upd(ei,si,f,v){setSets(function(p){var n=Object.assign({},p);n[ei]=p[ei].map(function(s,i){return i===si?Object.assign({},s,{[f]:v}):s;});return n;});}
+  function resetAll(){setDone(false);setMode(null);setDur("");setNotes("");setDist("");setFecha(today());setPreE(3);setPain(0);setPreN("");setPostE(3);setPostN("");}
+  var estado = {preEnergy:preE,prePain:pain,preNote:preN,postEnergy:postE,postNote:postN};
+  function saveG(){
+    addLog(Object.assign({date:fecha||today(),type:"gym",routineId:sr,routineDay:sd,label:D&&D.name||"Entrenamiento",duration:dur||null,notes:notes,exercises:D?D.exercises.map(function(ex,i){return {name:ex.name,sets:sets[i]||[]};}):[],},estado));
+    setDone(true);setTimeout(resetAll,2000);
+  }
+  function saveA(){
+    var L={running:"Carrera",swimming:"Natación",cycling:"Ciclismo",walking:"Caminata",other:"Actividad"};
+    addLog(Object.assign({date:fecha||today(),type:"activity",activityType:at,label:L[at]||"Actividad",duration:dur||null,distance:dist||null,notes:notes},estado));
+    setDone(true);setTimeout(resetAll,2000);
+  }
+  if(done) return <div style={{textAlign:"center",padding:"80px 20px"}}><div style={{fontSize:52}}>✅</div><div style={{color:C.accent,fontSize:20,fontWeight:800,marginTop:12}}>¡GUARDADO!</div></div>;
+  if(!mode) return <div>
+    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:16,fontWeight:700}}>¿QUÉ REGISTRÁS HOY?</div>
+    {[
+      {id:"gym",    icon:"🏋️", label:"Gimnasio",        desc:"Series, reps y cargas · GTP o DoIt",  color:C.green,  bg:C.greenBg},
+      {id:"swimming",icon:"🏊",label:"Natación",         desc:"Sesiones en pileta + calentamiento",  color:C.blue,   bg:C.blueBg},
+      {id:"home",   icon:"💪", label:"Bandas en casa",   desc:"Bloques A · B · C con bandas elásticas", color:C.purple, bg:C.purpleBg},
+      {id:"activity",icon:"🚴",label:"Otra actividad",   desc:"Ciclismo · Caminata · Running",       color:C.orange, bg:C.orangeBg},
+    ].map(function(x){
+      return <button key={x.id} onClick={function(){setMode(x.id);}} style={{...st.card,display:"flex",gap:14,alignItems:"center",width:"100%",textAlign:"left",cursor:"pointer",borderLeft:"4px solid "+x.color,background:x.bg+"88",marginBottom:10}}>
+        <span style={{fontSize:34}}>{x.icon}</span>
+        <div>
+          <div style={{fontSize:14,fontWeight:700,color:x.color}}>{x.label}</div>
+          <div style={{color:C.muted,fontSize:11,marginTop:3}}>{x.desc}</div>
+        </div>
+        <span style={{marginLeft:"auto",color:x.color,fontSize:18}}>›</span>
+      </button>;
+    })}
+  </div>;
+  // Swimming mode - use NATACION routine
+  var swimR = routines.find(function(r){return r.type==="swimming";});
+  var homeR = routines.find(function(r){return r.type==="home";});
+
+  if(mode==="swimming"||mode==="home"){
+    var modeR = mode==="swimming"?swimR:homeR;
+    var modeColor = mode==="swimming"?C.blue:C.purple;
+    var modeBg = mode==="swimming"?C.blueBg:C.purpleBg;
+    var modeIcon = mode==="swimming"?"🏊":"💪";
+    if(!modeR) return <div><Back fn={function(){setMode(null);}}/><div style={{color:C.muted,textAlign:"center",padding:40}}>Sin rutina disponible</div></div>;
+    var modeDay = modeR.days[sd]||modeR.days[0];
+    return <div>
+      <Back fn={function(){setMode(null);}}/>
+      <div style={{marginBottom:14}}>
+        <label style={st.lbl}>BLOQUE</label>
+        <select value={sd} onChange={function(e){setSd(Number(e.target.value));}} style={st.inp}>
+          {modeR.days.map(function(d,i){return <option key={i} value={i}>{d.name}</option>;})}
+        </select>
+      </div>
+      <div style={{background:modeBg,borderLeft:"4px solid "+modeColor,padding:"10px 12px",borderRadius:"0 8px 8px 0",marginBottom:16}}>
+        <div style={{fontSize:14,fontWeight:700,color:modeColor}}>{modeDay.name}</div>
+        <div style={{color:C.muted,fontSize:11,marginTop:2}}>{modeDay.focus}</div>
+      </div>
+      <div style={{...st.card,background:modeBg,borderColor:modeColor+"33",marginBottom:14}}>
+        {modeDay.exercises.map(function(ex,ei){
+          return <div key={ei} style={{padding:"6px 0",borderBottom:"1px solid "+C.border+"88",fontSize:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{flex:1,fontWeight:600}}>{ex.name}{ex.note?<span style={{color:C.muted,fontWeight:400}}> · {ex.note}</span>:""}</span>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <span style={{color:modeColor,fontWeight:700,fontSize:11}}>{ex.sets}×{ex.reps}</span>
+                <VidBtn url={ex.video}/>
+              </div>
+            </div>
+          </div>;
+        })}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        <div><label style={st.lbl}>FECHA</label><input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={st.inp}/></div>
+        <div><label style={st.lbl}>DURACIÓN (min)</label><input type="number" value={dur} onChange={function(e){setDur(e.target.value);}} style={st.inp} placeholder={mode==="swimming"?"50":"30"}/></div>
+      </div>
+      {mode==="swimming"&&<div style={{marginBottom:12}}><label style={st.lbl}>DISTANCIA (m)</label><input type="number" value={dist} onChange={function(e){setDist(e.target.value);}} style={st.inp} placeholder="1400"/></div>}
+      <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:60,resize:"none"}} placeholder="Observaciones..."/></div>
+      <EstadoForm preE={preE} setPreE={setPreE} pain={pain} setPain={setPain} preN={preN} setPreN={setPreN} postE={postE} setPostE={setPostE} postN={postN} setPostN={setPostN}/>
+      <button style={{...st.btn,background:modeColor}} onClick={function(){
+        addLog(Object.assign({date:fecha||today(),type:mode,routineId:modeR.id,routineDay:sd,
+          label:modeIcon+" "+modeDay.name,
+          duration:dur||null,distance:dist||null,notes:notes},estado));
+        setDone(true);setTimeout(resetAll,2000);
+      }}>GUARDAR {mode==="swimming"?"SESIÓN PILETA":"SESIÓN CASA"}</button>
+      <div style={{height:20}}/>
+    </div>;
+  }
+
+  if(mode==="activity") return <div>
+    <Back fn={function(){setMode(null);}}/>
+    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:16,fontWeight:700}}>REGISTRAR ACTIVIDAD</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+      <div><label style={st.lbl}>FECHA</label><input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={st.inp}/></div>
+      <div><label style={st.lbl}>DURACIÓN (min)</label><input type="number" value={dur} onChange={function(e){setDur(e.target.value);}} style={st.inp} placeholder="45"/></div>
+    </div>
+    <div style={{marginBottom:12}}><label style={st.lbl}>TIPO</label>
+      <select value={at} onChange={function(e){setAt(e.target.value);}} style={st.inp}>
+        {[["running","🏃 Running / Carrera"],["cycling","🚴 Ciclismo / Bici"],["walking","🚶 Caminata"],["other","⚡ Otra"]].map(function(x){return <option key={x[0]} value={x[0]}>{x[1]}</option>;})}
+      </select>
+    </div>
+    <div style={{marginBottom:12}}><label style={st.lbl}>DISTANCIA (km)</label><input type="number" value={dist} onChange={function(e){setDist(e.target.value);}} style={st.inp} placeholder="5.0"/></div>
+    <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:70,resize:"none"}} placeholder="¿Cómo resultó?"/></div>
+    <EstadoForm preE={preE} setPreE={setPreE} pain={pain} setPain={setPain} preN={preN} setPreN={setPreN} postE={postE} setPostE={setPostE} postN={postN} setPostN={setPostN}/>
+    <button style={st.btn} onClick={saveA}>GUARDAR ACTIVIDAD</button>
+  </div>;
+  if(!D) return <div style={{color:C.muted,textAlign:"center",padding:40}}>Sin rutina</div>;
+  return <div>
+    <Back fn={function(){setMode(null);}}/>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+      <div><label style={st.lbl}>RUTINA</label>
+        <select value={sr} onChange={function(e){setSr(e.target.value);setSd(0);}} style={st.inp}>
+          {routines.filter(function(r){return r.type==="gym";}).map(function(r){return <option key={r.id} value={r.id}>{r.name}</option>;})}
+        </select>
+      </div>
+      <div><label style={st.lbl}>BLOQUE</label>
+        <select value={sd} onChange={function(e){setSd(Number(e.target.value));}} style={st.inp}>
+          {R.days.map(function(d,i){return <option key={i} value={i}>{d.name}</option>;})}
+        </select>
+      </div>
+    </div>
+    <div style={{background:DB[sd%4]||C.accentBg,borderLeft:"4px solid "+(DC[sd%4]||C.accent),padding:"10px 12px",borderRadius:"0 8px 8px 0",marginBottom:16}}>
+      <div style={{fontSize:14,fontWeight:700,color:DC[sd%4]||C.accent}}>{D.name}</div>
+      <div style={{color:C.muted,fontSize:11,marginTop:2}}>{D.focus}</div>
+    </div>
+    {D.exercises.map(function(ex,ei){
+      var isMeter = ex.reps&&(ex.reps.indexOf("m")>-1||ex.reps.indexOf("min")>-1||ex.reps.indexOf("seg")>-1);
+      return <div key={ei} style={{...st.card,marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700}}>{ex.name}</div>
+            <div style={{color:C.muted,fontSize:10,marginTop:2}}>Objetivo: {ex.sets}×{ex.reps}{ex.note?" · "+ex.note:""}</div>
+          </div>
+          <VidBtn url={ex.video}/>
+        </div>
+        {!isMeter&&<div>
+          <div style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr",gap:5,marginBottom:5}}>
+            <span style={st.lbl}>#</span><span style={st.lbl}>REPS</span><span style={st.lbl}>PESO kg</span>
+          </div>
+          {(sets[ei]||[]).map(function(s,si){
+            return <div key={si} style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr",gap:5,marginBottom:5}}>
+              <div style={{color:DC[sd%4]||C.accent,fontSize:12,fontWeight:700,paddingTop:10,textAlign:"center"}}>{si+1}</div>
+              <input type="number" value={s.reps} onChange={function(e){upd(ei,si,"reps",e.target.value);}} style={{...st.inp,padding:"8px 10px"}} placeholder={ex.reps&&ex.reps.split("-")[0]||""}/>
+              <input type="number" value={s.weight} onChange={function(e){upd(ei,si,"weight",e.target.value);}} style={{...st.inp,padding:"8px 10px"}} placeholder="–"/>
+            </div>;
+          })}
+        </div>}
+      </div>;
+    })}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+      <div><label style={st.lbl}>FECHA</label><input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={st.inp}/></div>
+      <div><label style={st.lbl}>DURACIÓN (min)</label><input type="number" value={dur} onChange={function(e){setDur(e.target.value);}} style={st.inp} placeholder="90"/></div>
+    </div>
+    <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:70,resize:"none"}} placeholder="Observaciones..."/></div>
+    <EstadoForm preE={preE} setPreE={setPreE} pain={pain} setPain={setPain} preN={preN} setPreN={setPreN} postE={postE} setPostE={setPostE} postN={postN} setPostN={setPostN}/>
+    <button style={st.btn} onClick={saveG}>GUARDAR ENTRENAMIENTO</button>
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── LOG DETAIL (shared) ───────────────────────────────────────
+function LogDetail({l}){
+  var EMOJIS = ["","😴","😐","🙂","💪","🔥"];
+  return <div>
+    {l.exercises&&l.exercises.filter(function(e){return e.sets&&e.sets.some(function(s){return s.reps||s.weight;});}).map(function(e,i){
+      return <div key={i} style={{marginBottom:8}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:4}}>{e.name}</div>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+          {e.sets.filter(function(s){return s.reps||s.weight;}).map(function(s,si){
+            var txt = (s.reps||"?")+(s.weight?"×"+s.weight+"kg":"");
+            return <span key={si} style={{background:C.accentBg,borderRadius:5,padding:"3px 8px",fontSize:11,color:C.green,fontWeight:700}}>{txt}</span>;
+          })}
+        </div>
+      </div>;
+    })}
+    {l.notes&&<div style={{color:C.muted,fontSize:11,marginTop:6,fontStyle:"italic"}}>{l.notes}</div>}
+    {(l.preEnergy||l.prePain>0||l.postEnergy)&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+      {l.preEnergy?<span style={{background:C.card2,borderRadius:5,padding:"3px 8px",fontSize:10,color:C.muted}}>⚡ Antes: {EMOJIS[l.preEnergy]}</span>:null}
+      {l.prePain>0?<span style={{background:"#fff0f0",borderRadius:5,padding:"3px 8px",fontSize:10,color:C.danger}}>🦵 Ciático: {l.prePain}/5</span>:null}
+      {l.postEnergy?<span style={{background:C.accentBg,borderRadius:5,padding:"3px 8px",fontSize:10,color:C.green}}>✓ Después: {EMOJIS[l.postEnergy]}</span>:null}
+      {l.preNote?<span style={{color:C.muted,fontSize:10,fontStyle:"italic",width:"100%"}}>{l.preNote}</span>:null}
+      {l.postNote?<span style={{color:C.muted,fontSize:10,fontStyle:"italic",width:"100%"}}>{l.postNote}</span>:null}
+    </div>}
+  </div>;
+}
+
+// ── HISTORY ──────────────────────────────────────────────────
+function HistEdit({log,onSave,onClose}){
+  var [date,setDate] = useState(log.date);
+  var [dur,setDur] = useState(log.duration||"");
+  var [dist,setDist] = useState(log.distance||"");
+  var [notes,setNotes] = useState(log.notes||"");
+  var [preE,setPreE] = useState(log.preEnergy||3);
+  var [pain,setPain] = useState(log.prePain!=null?log.prePain:0);
+  var [preN,setPreN] = useState(log.preNote||"");
+  var [postE,setPostE] = useState(log.postEnergy||3);
+  var [postN,setPostN] = useState(log.postNote||"");
+  var [sets,setSets] = useState(function(){
+    var o={};
+    if(log.exercises) log.exercises.forEach(function(e,i){o[i]=e.sets&&e.sets.length?e.sets.map(function(s){return {reps:s.reps||"",weight:s.weight||""};}):[{reps:"",weight:""}];});
+    return o;
+  });
+  function upd(ei,si,f,v){setSets(function(p){var n=Object.assign({},p);n[ei]=p[ei].map(function(s,i){return i===si?Object.assign({},s,{[f]:v}):s;});return n;});}
+  function save(){onSave(Object.assign({},log,{date:date,duration:dur||null,distance:dist||null,notes:notes,preEnergy:preE,prePain:pain,preNote:preN,postEnergy:postE,postNote:postN,exercises:log.exercises?log.exercises.map(function(e,i){return Object.assign({},e,{sets:sets[i]||e.sets});}):[]}));}
+  return <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid "+C.border}}>
+    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>EDITAR SESIÓN</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+      <div><label style={st.lbl}>FECHA</label><input type="date" value={date} onChange={function(e){setDate(e.target.value);}} style={{...st.inp,fontSize:12}}/></div>
+      <div><label style={st.lbl}>DURACIÓN (min)</label><input type="number" value={dur} onChange={function(e){setDur(e.target.value);}} style={{...st.inp,fontSize:12}} placeholder="90"/></div>
+    </div>
+    {log.distance!=null&&<div style={{marginBottom:10}}><label style={st.lbl}>DISTANCIA (km)</label><input type="number" value={dist} onChange={function(e){setDist(e.target.value);}} style={{...st.inp,fontSize:12}} placeholder="5.0"/></div>}
+    {log.exercises&&log.exercises.map(function(ex,ei){
+      return <div key={ei} style={{marginBottom:10,background:C.card2,borderRadius:8,padding:10}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>{ex.name}</div>
+        <div style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr",gap:4,marginBottom:4}}>
+          <span style={st.lbl}>#</span><span style={st.lbl}>REPS</span><span style={st.lbl}>PESO</span>
+        </div>
+        {(sets[ei]||[]).map(function(s,si){
+          return <div key={si} style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr",gap:4,marginBottom:4}}>
+            <div style={{color:C.accent,fontSize:11,fontWeight:700,paddingTop:9,textAlign:"center"}}>{si+1}</div>
+            <input type="number" value={s.reps} onChange={function(e){upd(ei,si,"reps",e.target.value);}} style={{...st.inp,padding:"7px 8px",fontSize:12}} placeholder="–"/>
+            <input type="number" value={s.weight} onChange={function(e){upd(ei,si,"weight",e.target.value);}} style={{...st.inp,padding:"7px 8px",fontSize:12}} placeholder="–"/>
+          </div>;
+        })}
+        <button onClick={function(){setSets(function(p){var n=Object.assign({},p);n[ei]=[...p[ei],{reps:"",weight:""}];return n;});}} style={{...st.ghost,fontSize:10,marginTop:4,padding:"5px 10px",color:C.muted,borderColor:C.border}}>+ serie</button>
+      </div>;
+    })}
+    <div style={{marginBottom:10}}><label style={st.lbl}>NOTAS</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:60,resize:"none",fontSize:12}} placeholder="Observaciones..."/></div>
+    <EstadoForm preE={preE} setPreE={setPreE} pain={pain} setPain={setPain} preN={preN} setPreN={setPreN} postE={postE} setPostE={setPostE} postN={postN} setPostN={setPostN}/>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <button onClick={onClose} style={{...st.ghost,textAlign:"center",padding:"10px"}}>CANCELAR</button>
+      <button onClick={save} style={{...st.btn,padding:"10px"}}>GUARDAR</button>
+    </div>
+  </div>;
+}
+
+function History({logs,setLogs,sbUrl,sbKey}){
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+  var [ex,setEx] = useState(null);
+  var [editing,setEditing] = useState(null);
+  function csv(){
+    var rows = [["Fecha","Tipo","Actividad","Duración","Distancia","Notas","Energía antes","Ciático","Energía después","Ejercicios"]];
+    actLogs.forEach(function(l){
+      var exStr = l.exercises?l.exercises.map(function(e){return e.name+":"+((e.sets&&e.sets.filter(function(s){return s.reps||s.weight;}).map(function(s){return (s.reps||"?")+"rep@"+(s.weight||"?")+"kg";}).join("+"))||"–");}).join("|"):"";
+      rows.push([l.date,l.type,l.label||"",l.duration||"",l.distance||"",l.notes||"",l.preEnergy||"",l.prePain!=null?l.prePain:"",l.postEnergy||"",exStr]);
+    });
+    var c = rows.map(function(r){return r.map(function(v){return "\""+v+"\"";}).join(",");}).join("\n");
+    var a = document.createElement("a");a.href=URL.createObjectURL(new Blob(["\uFEFF"+c],{type:"text/csv;charset=utf-8;"}));a.download="trainlog_"+today()+".csv";a.click();
+  }
+  function del(id){if(window.confirm("¿Eliminar este registro?")){sbDelete(sbUrl,sbKey,id);setLogs(function(p){return p.filter(function(l){return l.id!==id;});});}}
+  function save(updated){setLogs(function(p){return p.map(function(l){return l.id===updated.id?updated:l;});});sbUpsert(sbUrl,sbKey,updated);setEditing(null);}
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,fontWeight:700}}>HISTORIAL · {actLogs.length} REGISTROS</div>
+      <button onClick={csv} style={st.ghost}>EXPORTAR CSV</button>
+    </div>
+    {!actLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:50}}>Sin registros todavía.</div>}
+    {actLogs.map(function(l){
+      var isExp = ex===l.id;
+      var isEdit = editing===l.id;
+      return <div key={l.id} style={{...st.card,cursor:"pointer"}} onClick={function(){if(!isEdit){setEx(isExp?null:l.id);}}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700}}>{l.label}</div>
+            <div style={{color:C.muted,fontSize:10,marginTop:3}}>{fmtDate(l.date)}{l.duration?" · "+l.duration+"min":""}{l.distance?" · "+l.distance+"km":""}</div>
+          </div>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <Chip label={l.type==="gym"?"GYM":l.type==="swimming"?"🏊":l.type==="home"?"💪":(l.activityType||"OTRA").toUpperCase().slice(0,4)} color={l.type==="gym"?C.green:l.type==="swimming"?C.blue:l.type==="home"?C.purple:C.orange} bg={l.type==="gym"?C.greenBg:l.type==="swimming"?C.blueBg:l.type==="home"?C.purpleBg:C.orangeBg}/>
+            <button onClick={function(e){e.stopPropagation();setEditing(isEdit?null:l.id);setEx(null);}} style={{background:"none",border:"none",color:C.blue,cursor:"pointer",fontSize:12,padding:2,fontWeight:700}}>✏️</button>
+            <button onClick={function(e){e.stopPropagation();del(l.id);}} style={{background:"none",border:"none",color:C.muted2,cursor:"pointer",fontSize:14,padding:2}}>✕</button>
+          </div>
+        </div>
+        {isExp&&!isEdit&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid "+C.border}}><LogDetail l={l}/></div>}
+        {isEdit&&<HistEdit log={l} onSave={save} onClose={function(){setEditing(null);}}/>}
+      </div>;
+    })}
+  </div>;
+}
+
+// ── CALENDAR ─────────────────────────────────────────────────
+function Calendar({logs,setLogs,onNavigate,sbUrl,sbKey}){
+  var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+  var [vd,setVd] = useState(new Date());
+  var [sel,setSel] = useState(today());
+  var [editing,setEditing] = useState(null);
+  var yr=vd.getFullYear(), mo=vd.getMonth();
+  var monthName = vd.toLocaleDateString("es-AR",{month:"long",year:"numeric"});
+  var firstDay = new Date(yr,mo,1).getDay();
+  var daysInMonth = new Date(yr,mo+1,0).getDate();
+  var logsByDate = {};
+  actLogs.forEach(function(l){if(!logsByDate[l.date])logsByDate[l.date]=[];logsByDate[l.date].push(l);});
+  var selLogs = logsByDate[sel]||[];
+  var selDate = new Date(sel+"T12:00:00");
+  var selDow = selDate.getDay();
+  var weekStart = new Date(selDate);weekStart.setDate(selDate.getDate()-selDow);
+  var weekDays = Array.from({length:7},function(_,i){var d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return d;});
+  function saveEdit(updated){setLogs(function(p){return p.map(function(l){return l.id===updated.id?updated:l;});});sbUpsert(sbUrl,sbKey,updated);setEditing(null);}
+  var DAY_ABBR = ["D","L","M","X","J","V","S"];
+  var DAY_NAMES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+  return <div>
+    <div style={st.card}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <button onClick={function(){setVd(new Date(yr,mo-1,1));}} style={{...st.ghost,padding:"6px 14px",fontSize:16}}>‹</button>
+        <div style={{fontWeight:700,fontSize:14,textTransform:"capitalize"}}>{monthName}</div>
+        <button onClick={function(){setVd(new Date(yr,mo+1,1));}} style={{...st.ghost,padding:"6px 14px",fontSize:16}}>›</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+        {DAY_ABBR.map(function(d){return <div key={d} style={{textAlign:"center",fontSize:9,color:C.muted,fontWeight:700,padding:"2px 0"}}>{d}</div>;})}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+        {Array.from({length:firstDay},function(_,i){return <div key={"e"+i}/>;  })}
+        {Array.from({length:daysInMonth},function(_,i){
+          var d=i+1;
+          var iso=isoDay(yr,mo,d);
+          var dl=logsByDate[iso]||[];
+          var isToday=iso===today();
+          var isSel=iso===sel;
+          var hasGym=dl.some(function(l){return l.type==="gym";});
+          var hasAct=dl.some(function(l){return l.type==="activity";});
+          return <div key={d} onClick={function(){setSel(iso);}} style={{textAlign:"center",padding:"5px 2px",borderRadius:8,cursor:"pointer",background:isSel?C.accent:isToday?C.accentBg:"transparent",border:isToday&&!isSel?"1px solid "+C.accent+"44":"1px solid transparent"}}>
+            <div style={{fontSize:12,fontWeight:isSel||isToday?700:400,color:isSel?"#fff":isToday?C.accent:C.text,lineHeight:1.4}}>{d}</div>
+            <div style={{display:"flex",justifyContent:"center",gap:2,marginTop:2,minHeight:5}}>
+              {hasGym&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"#fff":C.green}}/>}
+              {hasAct&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"rgba(255,255,255,0.7)":C.blue}}/>}
+            </div>
+          </div>;
+        })}
+      </div>
+      <div style={{display:"flex",gap:12,marginTop:10,justifyContent:"center"}}>
+        <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:C.muted}}><span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block"}}/>Gym</span>
+        <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:C.muted}}><span style={{width:6,height:6,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>Actividad</span>
+      </div>
+    </div>
+    <div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>SEMANA</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+        {weekDays.map(function(d,i){
+          var iso=isoDay(d.getFullYear(),d.getMonth(),d.getDate());
+          var dl=logsByDate[iso]||[];
+          var isSel=iso===sel;
+          var isT=iso===today();
+          return <div key={i} onClick={function(){setSel(iso);}} style={{textAlign:"center",cursor:"pointer",borderRadius:10,padding:"6px 2px",background:isSel?C.accent:isT?C.accentBg:"#faf9f7",border:"1px solid "+(isSel?C.accent:isT?C.accent+"44":C.border)}}>
+            <div style={{fontSize:8,color:isSel?"rgba(255,255,255,0.7)":C.muted,fontWeight:700,marginBottom:2}}>{DAY_NAMES[d.getDay()]}</div>
+            <div style={{fontSize:13,fontWeight:700,color:isSel?"#fff":isT?C.accent:C.text}}>{d.getDate()}</div>
+            <div style={{marginTop:3,display:"flex",flexDirection:"column",gap:2,alignItems:"center"}}>
+              {dl.map(function(l,li){return <div key={li} style={{fontSize:7,background:isSel?"rgba(255,255,255,0.25)":l.type==="gym"?C.greenBg:C.blueBg,color:isSel?"#fff":l.type==="gym"?C.green:C.blue,borderRadius:3,padding:"1px 3px",fontWeight:700,maxWidth:34,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.type==="gym"?"GYM":(l.activityType||"ACT").slice(0,3).toUpperCase()}</div>;  })}
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+    <div style={st.card}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,fontWeight:700}}>{fmtDateLong(sel).toUpperCase()}</div>
+        <button onClick={function(){onNavigate("log");}} style={{...st.ghost,fontSize:9,padding:"5px 10px"}}>+ REGISTRAR</button>
+      </div>
+      {!selLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"16px 0",fontSize:12}}>Sin actividad este día</div>}
+      {selLogs.map(function(l,i){
+        var isEdit=editing===l.id;
+        var ch=chipForType(l.type,l.activityType);
+        return <div key={i} style={{padding:"10px 0",borderBottom:i<selLogs.length-1?"1px solid "+C.border:"none"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:700}}>{l.label}</div>
+              <div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}{l.calories?" · "+l.calories+"kcal":""}</div>
+            </div>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <Chip label={ch.label} color={ch.color} bg={ch.bg}/>
+              <button onClick={function(){setEditing(isEdit?null:l.id);}} style={{background:"none",border:"none",color:C.blue,cursor:"pointer",fontSize:12,padding:2}}>✏️</button>
+            </div>
+          </div>
+          {!isEdit&&<LogDetail l={l}/>}
+          {isEdit&&<HistEdit log={l} onSave={saveEdit} onClose={function(){setEditing(null);}}/>}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+// ── AI ASSISTANT ─────────────────────────────────────────────
+function AIAssistant({logs,profile,routines,apiKey,sbUrl,sbKey}){
+  var INIT = [{role:"assistant",content:"¡Hola! Soy tu asistente de entrenamiento con Groq AI (gratis y rápido). Puedo analizar tu progreso, detectar patrones de energía o ciático, y sugerirte ajustes. ¿En qué te ayudo?"}];
+  var [msgs,setMsgs] = useState(function(){return ls.g("tl-chat")||INIT;});
+  var [chatLoaded,setChatLoaded] = useState(false);
+  var [inp,setInp] = useState("");
+  var [load,setLoad] = useState(false);
+  var ref = useRef(null);
+  useEffect(function(){ref.current&&ref.current.scrollIntoView({behavior:"smooth"});},[msgs]);
+  useEffect(function(){
+    if(chatLoaded||!sbUrl||!sbKey) return;
+    sbLoadChat(sbUrl,sbKey).then(function(remote){
+      if(remote&&remote.length>0){setMsgs(remote);ls.s("tl-chat",remote);}
+      setChatLoaded(true);
+    }).catch(function(){setChatLoaded(true);});
+  },[sbUrl,sbKey]);
+  useEffect(function(){
+    ls.s("tl-chat",msgs);
+    if(chatLoaded) sbSaveChat(sbUrl,sbKey,msgs);
+  },[msgs]);
+  function ctx(){
+    var p = profile;
+    var perfil = (p.name||"")+", "+(p.weight||"")+"kg, "+(p.height||"")+"cm, "+(p.age||"")+" años, objetivo: "+(p.goal||"");
+    var ruts = routines.map(function(r){return r.name+": "+r.days.map(function(d){return d.name;}).join(", ");}).join(" | ");
+    var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config";});
+    var hist = actLogs.slice(0,20).map(function(l){
+      var estr = "";
+      if(l.preEnergy) estr += " E-antes:"+l.preEnergy;
+      if(l.prePain) estr += " Ciático:"+l.prePain+"/5";
+      if(l.postEnergy) estr += " E-después:"+l.postEnergy;
+      if(l.preNote) estr += " ("+l.preNote+")";
+      if(l.postNote) estr += " ("+l.postNote+")";
+      if(l.calories) estr += " Cal:"+l.calories+"kcal";
+      if(l.hrAvg) estr += " FC:"+l.hrAvg+"bpm";
+      if(l.bodyBatDrop) estr += " BB:"+l.bodyBatDrop;
+      var exStr = "";
+      if(l.exercises&&l.exercises.length){
+        exStr = " ["+l.exercises.map(function(e){
+          var loaded = e.sets&&e.sets.filter(function(s){return s.weight;}).map(function(s){return s.reps+"r@"+s.weight+"kg";}).join(",");
+          return e.name+(loaded?":"+loaded:"");
+        }).join(";")+"]";
+      }
+      return l.date+": "+l.label+(l.duration?" "+l.duration+"min":"")+(l.distance?" "+l.distance+"km":"")+estr+exStr;
+    }).join("\n");
+    var sleepLogs = logs.filter(function(l){return l.type==="sleep";}).slice(0,14);
+    var sleepHist = sleepLogs.length?"\n\nSUEÑO (últimas "+sleepLogs.length+" noches):\n"+sleepLogs.map(function(s){
+      return s.date+": "+s.sleepQuality+" score:"+s.sleepScore+" dur:"+(s.duration?Math.floor(s.duration/60)+"h"+s.duration%60+"m":"--")+" HRV:"+(s.hrv||"--")+" FCreposo:"+(s.hrRest||"--")+" SpO2:"+(s.spo2||"--")+"% BB-mañana:"+(s.bodyBatMorning||"--");
+    }).join("\n"):"";
+    return "ATLETA: "+perfil+"\nRUTINAS: "+ruts+"\nHISTORIAL ACTIVIDADES:\n"+(hist||"Sin datos aún")+sleepHist;
+  }
+  var sys = "Sos un entrenador personal experto con criterio clínico. Hablás en español rioplatense, sos directo y concreto. Tu trabajo es ANALIZAR y dar recomendaciones REALES basadas ÚNICAMENTE en los datos del historial. Evitá frases condescendientes. Irónico cuando corresponde. Datos clave: 45 años, 80kg, 170cm, ciático diagnosticado, COMENZÓ NATACIÓN en abril 2026 (dejó el gym definitivamente), objetivo mejorar técnica y condición en pileta. IMC 27.7. REGLA CRÍTICA ANTI-ALUCINACIÓN: SOLO podés afirmar datos que estén EXPLÍCITAMENTE en el HISTORIAL. Si el atleta pregunta por datos que NO están (sueño, HRV, SpO2 sin filas de SUEÑO en contexto), respondé: No tengo esos datos, importalos desde Garmin Connect. Si SÍ hay datos de SUEÑO, analizalos normalmente. NUNCA inventes fechas, números ni métricas. Respuestas cortas y concretas. Máximo 4 párrafos.\n\n"+ctx();
+  function send(){
+    if(!inp.trim()||load) return;
+    if(!apiKey){alert("Ingresá tu Groq API Key en ⚙️ Configuración");return;}
+    var um = {role:"user",content:inp.trim()};
+    var nm = msgs.concat([um]);
+    setMsgs(nm);setInp("");setLoad(true);
+    callGroq(apiKey,sys,nm).then(function(r){setMsgs(function(p){return p.concat([{role:"assistant",content:r}]);});}).catch(function(e){setMsgs(function(p){return p.concat([{role:"assistant",content:"Error: "+e.message}]);});}).finally(function(){setLoad(false);});
+  }
+  var QQ = ["¿Cómo voy esta semana?","¿Qué descansar hoy?","Analizá mi ciático","Buscá patrones en mi energía"];
+  if(!apiKey) return <div style={{textAlign:"center",padding:"40px 20px"}}>
+    <div style={{fontSize:40,marginBottom:16}}>🤖</div>
+    <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:8}}>Asistente IA con Groq</div>
+    <div style={{fontSize:13,color:C.muted,lineHeight:1.7,marginBottom:20}}>Necesitás una API Key gratuita de Groq para usar el asistente.</div>
+    <div style={{...st.card,background:C.blueBg,borderColor:C.blue+"44",textAlign:"left"}}>
+      <div style={{color:C.blue,fontSize:9,letterSpacing:2,fontWeight:700,marginBottom:8}}>CÓMO OBTENERLA GRATIS</div>
+      <div style={{fontSize:12,color:C.text,lineHeight:1.9}}>1. Entrá a <strong>console.groq.com</strong><br/>2. Registrate con Google o email<br/>3. Menú → API Keys → Create API key<br/>4. Copiá la key (empieza con gsk_) y pegála en ⚙️ Configuración</div>
+    </div>
+  </div>;
+  return <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 170px)"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,fontWeight:700}}>GROQ · LLAMA 3.3 (GRATIS)</div>
+      <button onClick={function(){setMsgs(INIT);ls.s("tl-chat",INIT);}} style={{...st.ghost,fontSize:9,padding:"4px 10px",borderColor:C.border,color:C.muted}}>BORRAR</button>
+    </div>
+    <div style={{flex:1,overflowY:"auto"}}>
+      {msgs.map(function(m,i){
+        var isUser = m.role==="user";
+        return <div key={i} style={{marginBottom:10,display:"flex",justifyContent:isUser?"flex-end":"flex-start"}}>
+          {!isUser&&<div style={{width:28,height:28,borderRadius:"50%",background:C.blueBg,border:"1px solid "+C.blue+"44",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,marginRight:8,flexShrink:0,marginTop:3}}>🤖</div>}
+          <div style={{maxWidth:"82%",padding:"10px 13px",borderRadius:12,fontSize:13,lineHeight:1.6,background:isUser?C.accentBg:C.card,border:"1px solid "+(isUser?C.accent+"44":C.border),color:C.text,whiteSpace:isUser?"pre-wrap":"normal"}}>
+            {isUser?m.content:<span dangerouslySetInnerHTML={{__html:renderMD(m.content)}}/>}
+          </div>
+        </div>;
+      })}
+      {load&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <div style={{width:28,height:28,borderRadius:"50%",background:C.blueBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>🤖</div>
+        <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:"10px 14px",color:C.blue,fontSize:13,fontWeight:600}}>Pensando...</div>
+      </div>}
+      <div ref={ref}/>
+    </div>
+    <div style={{display:"flex",gap:5,marginTop:8,flexWrap:"wrap",marginBottom:8}}>
+      {QQ.map(function(q){return <button key={q} onClick={function(){setInp(q);}} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:6,padding:"5px 9px",fontSize:10,color:C.muted,cursor:"pointer",fontWeight:600}}>{q}</button>;})}
+    </div>
+    <div style={{display:"flex",gap:8}}>
+      <input value={inp} onChange={function(e){setInp(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey)send();}} style={{...st.inp,flex:1}} placeholder="Preguuntá sobre tu progreso..." disabled={load}/>
+      <button onClick={send} disabled={load||!inp.trim()} style={{...st.ghost,padding:"10px 16px",fontSize:16,opacity:load||!inp.trim()?0.4:1}}>→</button>
+    </div>
+  </div>;
+}
+
+// ── CHARTS ───────────────────────────────────────────────────
+function MiniBar({values,color,maxVal,height}){
+  var max = maxVal||Math.max.apply(null,values.map(function(v){return v.val||0;}))||1;
+  return <div style={{display:"flex",alignItems:"flex-end",gap:3,height:height||60}}>
+    {values.map(function(v,i){
+      var pct = max>0?(v.val||0)/max:0;
+      return <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+        <div style={{width:"100%",background:pct>0?color:C.border,borderRadius:"3px 3px 0 0",height:Math.max(pct*(height||60),pct>0?3:0),transition:"height 0.3s"}}/>
+        <div style={{fontSize:7,color:C.muted,fontWeight:600,textAlign:"center",lineHeight:1}}>{v.label}</div>
+      </div>;
+    })}
+  </div>;
+}
+function MiniLine({values,color,height}){
+  var max = Math.max.apply(null,values.map(function(v){return v.val||0;}))||1;
+  var min = Math.min.apply(null,values.filter(function(v){return v.val>0;}).map(function(v){return v.val;}))||0;
+  var range = max-min||1;
+  var w=280, h=height||60, pad=4;
+  var pts = values.map(function(v,i){
+    var x = pad + (i/(values.length-1||1))*(w-pad*2);
+    var y = v.val>0 ? h-pad - ((v.val-min)/range)*(h-pad*2) : h-pad;
+    return {x:x,y:y,val:v.val,label:v.label};
+  });
+  var path = pts.filter(function(p){return p.val>0;}).map(function(p,i){return (i===0?"M":"L")+p.x+","+p.y;}).join(" ");
+  return <div style={{overflowX:"auto"}}>
+    <svg width={w} height={h+20} style={{display:"block"}}>
+      {pts.filter(function(p){return p.val>0;}).map(function(p,i){
+        return <circle key={i} cx={p.x} cy={p.y} r={3} fill={color}/>;
+      })}
+      {path&&<path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round"/>}
+      {pts.map(function(p,i){
+        return <text key={i} x={p.x} y={h+14} textAnchor="middle" fontSize={7} fill={C.muted}>{p.label}</text>;
+      })}
+    </svg>
+  </div>;
+}
+
+function Charts({logs}){
+  var [period,setPeriod] = useState("30");
+  var days = parseInt(period);
+  var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-days);
+  var filtered = logs.filter(function(l){
+    return new Date(l.date+"T12:00:00")>=cutoff && l.type!=="config" && l.type!=="sleep";
+  });
+  var sleepLogs = logs.filter(function(l){
+    return new Date(l.date+"T12:00:00")>=cutoff && l.type==="sleep";
+  }).sort(function(a,b){return a.date.localeCompare(b.date);});
+
+  // ── Agrupar por semana ────────────────────────────────────
+  function weekKey(dateStr){
+    var d = new Date(dateStr+"T12:00:00");
+    var day = d.getDay(); // 0=dom
+    var diff = d.getDate() - day + (day===0?-6:1);
+    var mon = new Date(d); mon.setDate(diff);
+    return mon.toISOString().slice(0,10);
+  }
+  function weekLabel(iso){
+    var d = new Date(iso+"T12:00:00");
+    return pad2(d.getDate())+"/"+pad2(d.getMonth()+1);
+  }
+
+  // Semanas únicas ordenadas
+  var weeksSet = {};
+  filtered.forEach(function(l){ weeksSet[weekKey(l.date)]=true; });
+  var weeks = Object.keys(weeksSet).sort();
+
+  // ── Calorías por semana ───────────────────────────────────
+  var calByWeek = {};
+  weeks.forEach(function(w){ calByWeek[w]={gym:0,cardio:0}; });
+  filtered.forEach(function(l){
+    if(!l.calories) return;
+    var w = weekKey(l.date);
+    if(!calByWeek[w]) calByWeek[w]={gym:0,cardio:0};
+    if(l.type==="gym") calByWeek[w].gym+=l.calories;
+    else calByWeek[w].cardio+=l.calories;
+  });
+
+  // ── FC media por sesión (solo Garmin) ────────────────────
+  var hrData = filtered.filter(function(l){return l.hrAvg&&l.hrAvg>0;})
+    .slice(-15)
+    .map(function(l){return {val:l.hrAvg,label:l.date.slice(5).replace("-","/"),label2:l.label};});
+
+  // ── Body Battery drop por sesión ─────────────────────────
+  var bbData = filtered.filter(function(l){return l.bodyBatDrop&&l.bodyBatDrop<0;})
+    .slice(-15)
+    .map(function(l){return {val:Math.abs(l.bodyBatDrop),label:l.date.slice(5).replace("-","/"),tipo:l.label};});
+
+  // ── Duración semanal total ────────────────────────────────
+  var durByWeek = {};
+  weeks.forEach(function(w){ durByWeek[w]=0; });
+  filtered.forEach(function(l){
+    if(!l.duration) return;
+    var w = weekKey(l.date);
+    if(!durByWeek[w]) durByWeek[w]=0;
+    durByWeek[w]+=l.duration;
+  });
+
+  // ── Distribución de tipos ─────────────────────────────────
+  var typeCounts = {gym:0,swimming:0,activity:0,home:0};
+  filtered.forEach(function(l){ typeCounts[l.type]=(typeCounts[l.type]||0)+1; });
+  var totalActs = filtered.length||1;
+
+  // ── Stats resumen ─────────────────────────────────────────
+  var totalCal = filtered.reduce(function(s,l){return s+(l.calories||0);},0);
+  var avgHr = hrData.length?Math.round(hrData.reduce(function(s,v){return s+v.val;},0)/hrData.length):null;
+  var totalDur = filtered.reduce(function(s,l){return s+(l.duration||0);},0);
+  var maxBBdrop = bbData.length?Math.max.apply(null,bbData.map(function(v){return v.val;})):null;
+
+  var PERIOD_OPTS = [["7","7 días"],["30","30 días"],["90","3 meses"]];
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,fontWeight:700}}>ESTADÍSTICAS</div>
+      <div style={{display:"flex",gap:4}}>
+        {PERIOD_OPTS.map(function(o){
+          return <button key={o[0]} onClick={function(){setPeriod(o[0]);}} style={{background:period===o[0]?C.accent:C.card,color:period===o[0]?"#fff":C.muted,border:"1px solid "+(period===o[0]?C.accent:C.border),borderRadius:6,padding:"4px 10px",fontSize:10,cursor:"pointer",fontWeight:700}}>{o[1]}</button>;
+        })}
+      </div>
+    </div>
+
+    {/* Resumen numérico */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+      {[
+        {v:filtered.length,u:"actividades",color:C.accent},
+        {v:totalDur?Math.round(totalDur/60)+"h "+totalDur%60+"m":"--",u:"tiempo total",color:C.blue},
+        {v:totalCal?totalCal.toLocaleString()+" kcal":"--",u:"calorías",color:C.orange},
+        {v:avgHr?avgHr+" bpm":"--",u:"FC media",color:C.danger},
+      ].map(function(x,i){
+        return <div key={i} style={{...st.card,textAlign:"center",padding:"12px 8px",marginBottom:0}}>
+          <div style={{color:x.color,fontSize:20,fontWeight:800,lineHeight:1}}>{x.v}</div>
+          <div style={{color:C.muted,fontSize:9,marginTop:4,fontWeight:700}}>{x.u}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* Distribución de actividades */}
+    <div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:12,fontWeight:700}}>TIPO DE ACTIVIDADES</div>
+      {[
+        {key:"gym",label:"Gym / Fuerza",color:C.green},
+        {key:"activity",label:"Cardio / Cinta / Bici",color:C.blue},
+        {key:"swimming",label:"Natación",color:C.purple},
+        {key:"home",label:"Casa / Bandas",color:C.orange},
+      ].map(function(t){
+        var cnt = typeCounts[t.key]||0;
+        var pct = Math.round(cnt/totalActs*100);
+        if(!cnt) return null;
+        return <div key={t.key} style={{marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+            <span style={{fontSize:11,fontWeight:600}}>{t.label}</span>
+            <span style={{fontSize:11,color:C.muted}}>{cnt} ({pct}%)</span>
+          </div>
+          <div style={{background:C.border,borderRadius:4,height:6}}>
+            <div style={{background:t.color,borderRadius:4,height:6,width:pct+"%",transition:"width 0.4s"}}/>
+          </div>
+        </div>;
+      })}
+    </div>
+
+    {/* Calorías por semana */}
+    {weeks.length>0&&Object.values(calByWeek).some(function(w){return w.gym+w.cardio>0;})&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:12,fontWeight:700}}>CALORÍAS POR SEMANA</div>
+      <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80}}>
+        {weeks.map(function(w){
+          var gym = calByWeek[w].gym;
+          var cardio = calByWeek[w].cardio;
+          var total = gym+cardio;
+          var maxTotal = Math.max.apply(null,weeks.map(function(wk){return calByWeek[wk].gym+calByWeek[wk].cardio;}))||1;
+          var pct = total/maxTotal;
+          return <div key={w} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+            <div style={{fontSize:8,color:C.muted,fontWeight:600}}>{total>0?total:""}</div>
+            <div style={{width:"100%",display:"flex",flexDirection:"column",height:60}}>
+              <div style={{background:C.blue,borderRadius:"2px 2px 0 0",height:total>0?Math.round(cardio/maxTotal*60):0,minHeight:cardio>0?2:0}}/>
+              <div style={{background:C.green,height:total>0?Math.round(gym/maxTotal*60):0,minHeight:gym>0?2:0}}/>
+            </div>
+            <div style={{fontSize:7,color:C.muted,fontWeight:600}}>{weekLabel(w)}</div>
+          </div>;
+        })}
+      </div>
+      <div style={{display:"flex",gap:12,marginTop:8,justifyContent:"center"}}>
+        <span style={{fontSize:9,color:C.muted,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,background:C.green,borderRadius:2,display:"inline-block"}}/>Gym</span>
+        <span style={{fontSize:9,color:C.muted,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,background:C.blue,borderRadius:2,display:"inline-block"}}/>Cardio</span>
+      </div>
+    </div>}
+
+    {/* Duración semanal */}
+    {weeks.length>0&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:12,fontWeight:700}}>MINUTOS POR SEMANA</div>
+      <MiniBar values={weeks.map(function(w){return {val:durByWeek[w]||0,label:weekLabel(w)};})} color={C.accent} height={60}/>
+    </div>}
+
+    {/* FC media por sesión */}
+    {hrData.length>1&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>FRECUENCIA CARDÍACA MEDIA · ÚLTIMAS SESIONES</div>
+      <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Solo actividades con datos Garmin</div>
+      <MiniLine values={hrData} color={C.danger} height={60}/>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:10,color:C.muted}}>
+        <span>Mín: <strong style={{color:C.text}}>{Math.min.apply(null,hrData.map(function(v){return v.val;}))} bpm</strong></span>
+        <span>Prom: <strong style={{color:C.text}}>{avgHr} bpm</strong></span>
+        <span>Máx: <strong style={{color:C.text}}>{Math.max.apply(null,hrData.map(function(v){return v.val;}))} bpm</strong></span>
+      </div>
+    </div>}
+
+    {/* Body Battery drop */}
+    {bbData.length>0&&<div style={st.card}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>DESCARGA BODY BATTERY POR SESIÓN</div>
+      <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Cuánto Body Battery consume cada actividad</div>
+      <MiniBar values={bbData.map(function(v){return {val:v.val,label:v.label};})} color={C.orange} height={60}/>
+      <div style={{marginTop:8}}>
+        {bbData.slice(-5).reverse().map(function(v,i){
+          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+C.border,fontSize:11}}>
+            <span style={{color:C.muted}}>{v.label}</span>
+            <span style={{flex:1,paddingLeft:8,fontWeight:600}}>{v.tipo}</span>
+            <span style={{color:C.orange,fontWeight:700}}>-{v.val}</span>
+          </div>;
+        })}
+      </div>
+    </div>}
+
+    {/* ── SUEÑO ── */}
+    {sleepLogs.length>0&&<div>
+      <div style={{color:C.purple,fontSize:9,letterSpacing:2,fontWeight:700,marginBottom:10,marginTop:4}}>SUEÑO · DATOS GARMIN</div>
+
+      {/* Resumen sueño */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        {[
+          {v:sleepLogs.length,u:"noches registradas",color:C.purple},
+          {v:sleepLogs.filter(function(s){return s.sleepScore;}).length?Math.round(sleepLogs.reduce(function(a,s){return a+(s.sleepScore||0);},0)/sleepLogs.filter(function(s){return s.sleepScore;}).length)+"pts":"--",u:"puntuación media",color:C.blue},
+          {v:sleepLogs.filter(function(s){return s.duration;}).length?Math.floor(sleepLogs.reduce(function(a,s){return a+(s.duration||0);},0)/sleepLogs.filter(function(s){return s.duration;}).length/60)+"h "+Math.round(sleepLogs.reduce(function(a,s){return a+(s.duration||0);},0)/sleepLogs.filter(function(s){return s.duration;}).length%60)+"m":"--",u:"duración media",color:C.green},
+          {v:sleepLogs.filter(function(s){return s.hrv;}).length?Math.round(sleepLogs.reduce(function(a,s){return a+(s.hrv||0);},0)/sleepLogs.filter(function(s){return s.hrv;}).length):"--",u:"HRV medio",color:C.orange},
+        ].map(function(x,i){
+          return <div key={i} style={{...st.card,textAlign:"center",padding:"12px 8px",marginBottom:0}}>
+            <div style={{color:x.color,fontSize:20,fontWeight:800,lineHeight:1}}>{x.v}</div>
+            <div style={{color:C.muted,fontSize:9,marginTop:4,fontWeight:700}}>{x.u}</div>
+          </div>;
+        })}
+      </div>
+
+      {/* Puntuación de sueño */}
+      {sleepLogs.length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>PUNTUACIÓN DE SUEÑO</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Mayor es mejor · máx 100</div>
+        <MiniLine values={sleepLogs.map(function(s){return {val:s.sleepScore||0,label:s.date.slice(5).replace("-","/")};})} color={C.purple} height={60}/>
+        <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+          {sleepLogs.slice(-7).map(function(s,i){
+            var QUAL_COLOR={"Excelente":C.green,"Bueno":C.blue,"Aceptable":C.orange,"Malo":C.danger};
+            var qc = QUAL_COLOR[s.sleepQuality]||C.muted;
+            return <div key={i} style={{background:C.card2,borderRadius:6,padding:"4px 8px",fontSize:10,display:"flex",gap:4,alignItems:"center"}}>
+              <span style={{color:C.muted}}>{s.date.slice(5).replace("-","/")}</span>
+              <span style={{color:qc,fontWeight:700}}>{s.sleepQuality}</span>
+              <span style={{color:C.purple,fontWeight:700}}>{s.sleepScore}</span>
+            </div>;
+          })}
+        </div>
+      </div>}
+
+      {/* Duración del sueño */}
+      {sleepLogs.length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>DURACIÓN DEL SUEÑO</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>En minutos · línea punteada = necesidad ({sleepLogs[0]&&sleepLogs[0].sleepNeed||"7h 50min"})</div>
+        <MiniBar values={sleepLogs.map(function(s){return {val:s.duration||0,label:s.date.slice(5).replace("-","/")};})} color={C.purple} height={60}/>
+      </div>}
+
+      {/* HRV */}
+      {sleepLogs.filter(function(s){return s.hrv;}).length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>HRV · VARIABILIDAD DE FC NOCTURNA</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Mayor HRV = mejor recuperación</div>
+        <MiniLine values={sleepLogs.map(function(s){return {val:s.hrv||0,label:s.date.slice(5).replace("-","/")};})} color={C.orange} height={60}/>
+      </div>}
+
+      {/* Body Battery al despertar */}
+      {sleepLogs.filter(function(s){return s.bodyBatMorning;}).length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>BODY BATTERY AL DESPERTAR</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Energía disponible al iniciar el día</div>
+        <MiniBar values={sleepLogs.map(function(s){return {val:s.bodyBatMorning||0,label:s.date.slice(5).replace("-","/")};})} color={C.blue} height={60}/>
+      </div>}
+
+      {/* FC en reposo */}
+      {sleepLogs.filter(function(s){return s.hrRest;}).length>1&&<div style={st.card}>
+        <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:4,fontWeight:700}}>FC EN REPOSO NOCTURNA</div>
+        <div style={{color:C.muted,fontSize:9,marginBottom:10}}>Menor es mejor · indica recuperación cardíaca</div>
+        <MiniLine values={sleepLogs.map(function(s){return {val:s.hrRest||0,label:s.date.slice(5).replace("-","/")};})} color={C.danger} height={60}/>
+      </div>}
+    </div>}
+
+    {!filtered.length&&!sleepLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"50px 20px"}}>
+      <div style={{fontSize:42,marginBottom:12}}>📈</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.text}}>Sin datos para este período</div>
+      <div style={{fontSize:12,marginTop:6}}>Registrá actividades o importá tu CSV de Garmin</div>
+    </div>}
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── SLEEP IMPORTER COMPONENT ─────────────────────────────────
+function SleepImporter({logs,onImport}){
+  var [result,setResult] = useState(null);
+  var [loading,setLoading] = useState(false);
+  var fileRef = useRef(null);
+  function handleFile(e){
+    var file = e.target.files&&e.target.files[0];
+    if(!file) return;
+    setLoading(true);setResult(null);
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var parsed = parseGarminSleep(ev.target.result);
+        var existingIds = new Set(logs.map(function(l){return l.id;}));
+        var nuevas = []; var duplicadas = 0;
+        parsed.forEach(function(s){
+          if(existingIds.has(s.id)){duplicadas++;}
+          else{nuevas.push(s);}
+        });
+        setResult({nuevas:nuevas,duplicadas:duplicadas,total:parsed.length});
+        setLoading(false);
+      }catch(err){
+        setResult({error:"Error: "+err.message});
+        setLoading(false);
+      }
+    };
+    reader.readAsText(file,"UTF-8");
+  }
+  function confirmar(){
+    if(!result||!result.nuevas) return;
+    result.nuevas.forEach(function(s){onImport(s);});
+    setResult(Object.assign({},result,{importado:true}));
+    if(fileRef.current) fileRef.current.value="";
+  }
+  var QUAL_COLOR = {"Excelente":C.green,"Bueno":C.blue,"Aceptable":C.orange,"Malo":C.danger};
+  return <div style={{...st.card,background:"#f0eaff",borderColor:C.purple+"44",marginTop:10}}>
+    <div style={{color:C.purple,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>🌙 IMPORTAR SUEÑO · GARMIN</div>
+    <div style={{color:C.muted,fontSize:11,lineHeight:1.8,marginBottom:12}}>
+      En <strong style={{color:C.purple}}>connect.garmin.com</strong> → Salud → Sueño → Exportar CSV.<br/>
+      Podés subir el mismo archivo todas las semanas, solo importa noches nuevas.
+    </div>
+    <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}} id="sleep-file"/>
+    <label htmlFor="sleep-file" style={{...st.btn,background:C.purple,display:"block",textAlign:"center",cursor:"pointer",marginBottom:result?10:0}}>
+      {loading?"LEYENDO...":"📂 SELECCIONAR CSV DE SUEÑO"}
+    </label>
+    {result&&!result.error&&!result.importado&&<div style={{marginTop:10}}>
+      <div style={{...st.card,background:C.card2,padding:12,marginBottom:8}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Resumen:</div>
+        <div style={{fontSize:12,lineHeight:2}}>
+          📋 Total noches: <strong>{result.total}</strong><br/>
+          ✅ Nuevas: <strong style={{color:C.green}}>{result.nuevas.length}</strong><br/>
+          ⏭️ Ya existían: <strong style={{color:C.muted}}>{result.duplicadas}</strong>
+        </div>
+      </div>
+      {result.nuevas.length>0&&<div>
+        <div style={{maxHeight:160,overflowY:"auto",marginBottom:10}}>
+          {result.nuevas.map(function(s,i){
+            var qcolor = QUAL_COLOR[s.sleepQuality]||C.muted;
+            return <div key={i} style={{fontSize:11,padding:"5px 0",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <span style={{fontWeight:700}}>{s.date}</span>
+                <span style={{color:qcolor,fontWeight:700,marginLeft:8}}>{s.sleepQuality}</span>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                {s.duration&&<span style={{color:C.blue,fontSize:10}}>{Math.floor(s.duration/60)}h{s.duration%60}m</span>}
+                {s.sleepScore&&<span style={{color:C.purple,fontSize:10,fontWeight:700}}>{s.sleepScore}pts</span>}
+                {s.hrv&&<span style={{color:C.orange,fontSize:10}}>HRV:{s.hrv}</span>}
+              </div>
+            </div>;
+          })}
+        </div>
+        <button onClick={confirmar} style={{...st.btn,background:C.purple}}>
+          IMPORTAR {result.nuevas.length} NOCHE{result.nuevas.length!==1?"S":""}
+        </button>
+      </div>}
+      {result.nuevas.length===0&&<div style={{textAlign:"center",color:C.muted,fontSize:12,padding:"10px 0"}}>No hay noches nuevas para importar.</div>}
+    </div>}
+    {result&&result.importado&&<div style={{...st.card,background:C.purpleBg,borderColor:C.purple+"44",padding:12,marginTop:8,textAlign:"center"}}>
+      <div style={{color:C.purple,fontWeight:700,fontSize:13}}>✅ {result.nuevas.length} noche{result.nuevas.length!==1?"s":""} importada{result.nuevas.length!==1?"s":""}</div>
+    </div>}
+    {result&&result.error&&<div style={{color:C.danger,fontSize:12,marginTop:8,fontWeight:600}}>{result.error}</div>}
+  </div>;
+}
+
+// ── GARMIN IMPORTER COMPONENT ────────────────────────────────
+function GarminImporter({logs,onImport}){
+  var [result,setResult] = useState(null);
+  var [loading,setLoading] = useState(false);
+  var fileRef = useRef(null);
+  function handleFile(e){
+    var file = e.target.files&&e.target.files[0];
+    if(!file) return;
+    setLoading(true);setResult(null);
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var parsed = parseGarminCSV(ev.target.result);
+        // IDs existentes en el historial
+        var existingIds = new Set(logs.map(function(l){return l.id;}));
+        // También chequear por fecha+label para actividades manuales
+        var existingKeys = new Set(logs.map(function(l){return l.date+"_"+l.label;}));
+        var nuevas = [];
+        var duplicadas = 0;
+        parsed.forEach(function(act){
+          if(existingIds.has(act.id)||existingKeys.has(act.date+"_"+act.label)){
+            duplicadas++;
+          } else {
+            nuevas.push(act);
+          }
+        });
+        setResult({nuevas:nuevas,duplicadas:duplicadas,total:parsed.length});
+        setLoading(false);
+      }catch(err){
+        setResult({error:"Error al leer el archivo: "+err.message});
+        setLoading(false);
+      }
+    };
+    reader.readAsText(file,"UTF-8");
+  }
+  function confirmar(){
+    if(!result||!result.nuevas) return;
+    result.nuevas.forEach(function(act){onImport(act);});
+    setResult(Object.assign({},result,{importado:true}));
+    if(fileRef.current) fileRef.current.value="";
+  }
+  return <div style={{...st.card,background:"#f0f7ff",borderColor:C.blue+"44",marginTop:10}}>
+    <div style={{color:C.blue,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>⌚ IMPORTAR DESDE GARMIN CONNECT</div>
+    <div style={{color:C.muted,fontSize:11,lineHeight:1.8,marginBottom:12}}>
+      En <strong style={{color:C.blue}}>connect.garmin.com</strong> → Actividades → Todas las actividades → Exportar CSV.<br/>
+      Podés subir el mismo archivo todas las semanas — solo importa las actividades nuevas.
+    </div>
+    <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}} id="garmin-file"/>
+    <label htmlFor="garmin-file" style={{...st.btn,background:C.blue,display:"block",textAlign:"center",cursor:"pointer",marginBottom:result?10:0}}>
+      {loading?"LEYENDO...":"📂 SELECCIONAR CSV DE GARMIN"}
+    </label>
+    {result&&!result.error&&!result.importado&&<div style={{marginTop:10}}>
+      <div style={{...st.card,background:C.card2,padding:12,marginBottom:8}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Resumen del archivo:</div>
+        <div style={{fontSize:12,color:C.text,lineHeight:2}}>
+          📋 Total actividades: <strong>{result.total}</strong><br/>
+          ✅ Nuevas para importar: <strong style={{color:C.green}}>{result.nuevas.length}</strong><br/>
+          ⏭️ Ya existían (ignoradas): <strong style={{color:C.muted}}>{result.duplicadas}</strong>
+        </div>
+      </div>
+      {result.nuevas.length>0&&<div>
+        <div style={{maxHeight:160,overflowY:"auto",marginBottom:10}}>
+          {result.nuevas.map(function(a,i){
+            return <div key={i} style={{fontSize:11,padding:"5px 0",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <span style={{fontWeight:700}}>{a.label}</span>
+                <span style={{color:C.muted}}> · {a.date}</span>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {a.duration&&<span style={{color:C.blue,fontSize:10}}>{a.duration}min</span>}
+                {a.calories&&<span style={{color:C.orange,fontSize:10}}>{a.calories}kcal</span>}
+                {a.hrAvg&&<span style={{color:C.danger,fontSize:10}}>♥{a.hrAvg}</span>}
+              </div>
+            </div>;
+          })}
+        </div>
+        <button onClick={confirmar} style={{...st.btn,background:C.green}}>
+          IMPORTAR {result.nuevas.length} ACTIVIDAD{result.nuevas.length!==1?"ES":""}
+        </button>
+      </div>}
+      {result.nuevas.length===0&&<div style={{textAlign:"center",color:C.muted,fontSize:12,padding:"10px 0"}}>No hay actividades nuevas para importar.</div>}
+    </div>}
+    {result&&result.importado&&<div style={{...st.card,background:C.greenBg,borderColor:C.green+"44",padding:12,marginTop:8,textAlign:"center"}}>
+      <div style={{color:C.green,fontWeight:700,fontSize:13}}>✅ {result.nuevas.length} actividad{result.nuevas.length!==1?"es":""}  importada{result.nuevas.length!==1?"s":""} correctamente</div>
+    </div>}
+    {result&&result.error&&<div style={{color:C.danger,fontSize:12,marginTop:8,fontWeight:600}}>{result.error}</div>}
+  </div>;
+}
+
+
+// ── HELP ─────────────────────────────────────────────────────
+function Help(){
+  var [sec,setSec]=useState(null);
+  var sections=[
+    {id:"nav",icon:"🗺️",title:"Cómo navegar la app",content:[
+      "La barra inferior tiene 4 botones: Inicio, Reg., IA y Config.",
+      "El botón ••• (Más) abre Calendario, Historial, Gráficos y esta Ayuda.",
+      "Desde Inicio podés tocar INICIAR → para ir directo a la próxima sesión.",
+    ]},
+    {id:"modos",icon:"🔄",title:"Modo Gym vs Modo Pileta",content:[
+      "El switch en Inicio cambia qué sesión te sugiere como próxima.",
+      "Modo Gym → sugiere el próximo día de musculación (GTP o DoIt).",
+      "Modo Pileta → sugiere la próxima sesión de natación (A, B, C o D).",
+      "Las bandas en casa están siempre disponibles como complemento.",
+    ]},
+    {id:"registro",icon:"＋",title:"Registrar un entrenamiento",content:[
+      "Tocá Reg. o INICIAR → desde el inicio.",
+      "Elegí: Natación, Gimnasio, Bandas en casa u Otra actividad.",
+      "Seleccioná el bloque/sesión del desplegable.",
+      "El Estado físico (📋) es opcional pero valioso para la IA.",
+      "Al guardar se sincroniza automáticamente con Supabase.",
+    ]},
+    {id:"bloques",icon:"🏊",title:"Sesiones de natación",content:[
+      "⚡ Calentamiento borde de pileta: 3 min de movilidad antes de entrar.",
+      "⚡ Precalentamiento en casa: 15 min de activación antes de ir.",
+      "Sesión A: Fondo suave — 1400m, ideal para empezar la semana.",
+      "Sesión B: Técnica + accesorios — aletas, pull buoy, manoplas.",
+      "Sesión C: Resistencia base — 1600m con series.",
+      "Sesión D: Recuperación activa — 1200m muy suave, opcional.",
+      "Rotá entre A, B, C sin días consecutivos. D es para recuperación.",
+    ]},
+    {id:"garmin",icon:"⌚",title:"Importar datos del Garmin FR265",content:[
+      "Desde connect.garmin.com exportás CSV de Actividades y de Sueño.",
+      "Actividades: sección Actividades → Todas → Exportar CSV.",
+      "Sueño: sección Salud → Sueño → Exportar CSV.",
+      "Subí los archivos desde Config. La app detecta duplicados automáticamente.",
+      "Podés subir el mismo CSV todas las semanas sin problema.",
+      "Natación en piscina del Garmin se importa correctamente como 🏊.",
+    ]},
+    {id:"ia",icon:"🤖",title:"Asistente IA",content:[
+      "Analiza tus últimas 20 actividades y 14 noches de sueño.",
+      "Solo responde con datos reales de tu historial — nunca inventa.",
+      "Preguntale: '¿Nado mejor después de dormir bien?', '¿Cómo va mi ciático?'",
+      "El historial de chat se sincroniza entre dispositivos vía Supabase.",
+      "Necesitás API Key gratuita de console.groq.com.",
+    ]},
+    {id:"supabase",icon:"☁️",title:"Sincronización entre dispositivos",content:[
+      "Los datos viven en Supabase — base de datos en la nube gratuita.",
+      "En un dispositivo nuevo, ingresá las credenciales en Config.",
+      "Se sincronizan: actividades, datos de sueño e historial de IA.",
+      "El PIN de acceso es solo local, no viaja entre dispositivos.",
+    ]},
+    {id:"ciatico",icon:"⚠️",title:"Protocolo ciático",content:[
+      "Si sentís hormigueo hacia la pierna: pará inmediatamente.",
+      "Registrá el dolor (0-5) en Estado físico antes de cada sesión.",
+      "Con dolor ≥3 la app te avisa que consideres sesión suave o descanso.",
+      "La natación es de bajo impacto — es el deporte más seguro para el ciático.",
+      "Siempre hacé el calentamiento antes de entrar al agua.",
+    ]},
+  ];
+  return <div>
+    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:16,fontWeight:700}}>GUÍA DE USO · TRAINLOG</div>
+    <div style={{...st.card,background:C.accentBg,borderColor:C.accent+"44",marginBottom:14}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.accent,marginBottom:6}}>🏊 ¡Bienvenido a tu etapa de natación!</div>
+      <div style={{fontSize:12,color:C.text,lineHeight:1.7}}>Registrá tus sesiones, importá los datos del Garmin y dejá que la IA detecte patrones en tu rendimiento y descanso.</div>
+    </div>
+    {sections.map(function(s){
+      var isOpen=sec===s.id;
+      return <div key={s.id} style={st.card}>
+        <button onClick={function(){setSec(isOpen?null:s.id);}} style={{background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <span style={{fontSize:20}}>{s.icon}</span>
+            <span style={{fontSize:13,fontWeight:700}}>{s.title}</span>
+          </div>
+          <span style={{color:C.muted,fontSize:14}}>{isOpen?"▲":"▼"}</span>
+        </button>
+        {isOpen&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid "+C.border}}>
+          {s.content.map(function(line,i){
+            return <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"flex-start"}}>
+              <span style={{color:C.accent,fontSize:12,flexShrink:0}}>·</span>
+              <span style={{fontSize:12,color:C.text,lineHeight:1.6}}>{line}</span>
+            </div>;
+          })}
+        </div>}
+      </div>;
+    })}
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────
+function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setSbKey,sbSyncing,addLog,logs}){
+  var [ki,setKi] = useState(apiKey);
+  var [su,setSu] = useState(sbUrl);
+  var [sk,setSk] = useState(sbKey);
+  var [ok,setOk] = useState(false);
+  var [showKey,setShowKey] = useState(false);
+  function saveKey(){setApiKey(ki);ls.s("tl-groq-key",ki);setOk(true);setTimeout(function(){setOk(false);},2000);}
+  function saveSb(){setSbUrl(su);setSbKey(sk);ls.s("tl-sb-url",su);ls.s("tl-sb-key",sk);setOk(true);setTimeout(function(){setOk(false);},2000);}
+  var fields = [{k:"name",l:"NOMBRE",t:"text",p:"Luciano"},{k:"age",l:"EDAD",t:"number",p:"45"},{k:"weight",l:"PESO (kg)",t:"number",p:"80"},{k:"height",l:"ALTURA (cm)",t:"number",p:"170"},{k:"goal",l:"OBJETIVO",t:"text",p:"Gym → Natación, cuidar ciático"}];
+  return <div>
+    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:18,fontWeight:700}}>DATOS DEL ATLETA</div>
+    {fields.map(function(f){return <div key={f.k} style={{marginBottom:13}}><label style={st.lbl}>{f.l}</label><input type={f.t} value={profile[f.k]||""} onChange={function(e){setProfile(function(p){var n=Object.assign({},p);n[f.k]=e.target.value;return n;});}} style={st.inp} placeholder={f.p}/></div>;})}
+    <div style={{marginBottom:20}}><label style={st.lbl}>GÉNERO</label><select value={profile.gender||"M"} onChange={function(e){setProfile(function(p){return Object.assign({},p,{gender:e.target.value});});}} style={st.inp}><option value="M">Masculino</option><option value="F">Femenino</option><option value="O">Prefiero no indicar</option></select></div>
+    <div style={{...st.card,background:C.blueBg,borderColor:C.blue+"44"}}>
+      <div style={{color:C.blue,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>🤖 GROQ API KEY (GRATIS)</div>
+      <div style={{color:C.muted,fontSize:11,lineHeight:1.7,marginBottom:12}}>Obtené tu key gratis en <strong style={{color:C.blue}}>console.groq.com</strong> (sin tarjeta).<br/>Se guarda solo en este dispositivo.</div>
+      <div style={{position:"relative",marginBottom:10}}>
+        <input type={showKey?"text":"password"} value={ki} onChange={function(e){setKi(e.target.value);}} style={{...st.inp,paddingRight:44}} placeholder="gsk_..."/>
+        <button onClick={function(){setShowKey(!showKey);}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:C.muted,padding:"4px"}}>{showKey?"🙈":"👁️"}</button>
+      </div>
+      {ki&&<div style={{background:C.card2,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:11,color:C.muted,wordBreak:"break-all",fontFamily:"monospace"}}>{showKey?ki:ki.slice(0,8)+"••••••••••••"+ki.slice(-4)}</div>}
+      <button onClick={saveKey} style={{...st.btn,background:ok?C.green:C.blue}}>{ok?"✓ GUARDADA":"GUARDAR KEY"}</button>
+      {apiKey&&<div style={{color:C.green,fontSize:11,marginTop:8,fontWeight:700,textAlign:"center"}}>✓ Key activa — IA habilitada</div>}
+    </div>
+    <div style={{...st.card,background:"#f0f7ff",borderColor:"#1a5fa844",marginTop:10}}>
+      <div style={{color:C.blue,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>🗄️ SUPABASE · SINCRONIZACIÓN EN LA NUBE</div>
+      <div style={{color:C.muted,fontSize:11,lineHeight:1.7,marginBottom:10}}>Creá cuenta gratis en <strong style={{color:C.blue}}>supabase.com</strong>. SQL para crear la tabla:</div>
+      <div style={{background:C.card2,borderRadius:8,padding:"8px 10px",marginBottom:12,fontSize:10,color:C.muted,fontFamily:"monospace",lineHeight:1.8,wordBreak:"break-all"}}>
+        create table trainlog (id text primary key, date text, type text, label text, duration int, distance float, notes text, pre_energy int, pre_pain int, pre_note text, post_energy int, post_note text, data jsonb);
+      </div>
+      <div style={{marginBottom:8}}><label style={st.lbl}>PROJECT URL</label><input value={su} onChange={function(e){setSu(e.target.value);}} style={st.inp} placeholder="https://xxxx.supabase.co"/></div>
+      <div style={{marginBottom:10}}><label style={st.lbl}>ANON PUBLIC KEY</label><input type="password" value={sk} onChange={function(e){setSk(e.target.value);}} style={st.inp} placeholder="eyJhbGci..."/></div>
+      <button onClick={saveSb} style={{...st.btn,background:ok?C.green:C.blue,marginBottom:8}}>{ok?"✓ GUARDADO":"GUARDAR SUPABASE"}</button>
+      {sbUrl&&sbKey&&<div style={{marginTop:8}}><div style={{color:C.green,fontSize:11,fontWeight:700,textAlign:"center",marginBottom:8}}>{sbSyncing?"⏳ Sincronizando...":"✓ Supabase configurado"}</div><button onClick={function(){fetch(sbUrl+"/rest/v1/trainlog?select=count",{headers:{"apikey":sbKey,"Authorization":"Bearer "+sbKey,"Prefer":"count=exact"}}).then(function(r){var count=r.headers.get("content-range");return r.json().then(function(d){return {d:d,count:count,ok:r.ok,status:r.status};});}).then(function(x){if(x.ok){alert("✅ Conexión OK\nRegistros en Supabase: "+(x.count?x.count.split("/")[1]||"0":"0")+"\n\nSi ves 0 registros aunque cargaste actividades, el problema es RLS (Row Level Security). Desactivalo en Supabase: Authentication → Policies → trainlog → Disable RLS");}else{alert("❌ Error "+x.status+"\n"+JSON.stringify(x.d)+"\n\nVerificá que la URL y la key sean correctas");}}).catch(function(e){alert("❌ Sin conexión: "+e.message);});}} style={{...st.ghost,width:"100%",textAlign:"center",borderColor:C.blue+"44",color:C.blue,fontSize:11,marginTop:4}}>VERIFICAR CONEXION</button></div>}
+    </div>
+    <SleepImporter logs={logs} onImport={addLog}/>
+    <GarminImporter logs={logs} onImport={addLog}/>
+    <div style={{...st.card,background:C.greenBg,borderColor:C.green+"44",marginTop:10}}>
+      <div style={{color:C.green,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>📊 EXPORTAR A GOOGLE SHEETS</div>
+      <div style={{color:C.muted,fontSize:12,lineHeight:1.7}}>Historial → <strong style={{color:C.text}}>Exportar CSV</strong> → importar en Sheets: Archivo → Importar → Subir archivo.</div>
+    </div>
+    <div style={{...st.card,background:"#f8f8f6",borderColor:C.border,marginTop:10}}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>📱 INSTALAR COMO APP</div>
+      <div style={{color:C.muted,fontSize:12,lineHeight:1.9}}><strong style={{color:C.text}}>Android (Chrome):</strong> menú ⋮ → "Agregar a pantalla de inicio"<br/><strong style={{color:C.text}}>iPhone (Safari):</strong> compartir → "Añadir a pantalla de inicio"<br/><span style={{color:C.muted2,fontSize:11}}>Funciona offline, excepto el asistente IA</span></div>
+    </div>
+    <div style={{...st.card,background:C.card2,borderColor:C.border,marginTop:10}}>
+      <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>🔒 SEGURIDAD · PIN DE ACCESO</div>
+      <div style={{color:C.muted,fontSize:12,lineHeight:1.7,marginBottom:10}}>La app está protegida con PIN. Para cambiarlo, cerrá sesión.</div>
+      <button onClick={function(){ls.s("tl-pin","");window.location.reload();}} style={{...st.ghost,width:"100%",textAlign:"center",fontSize:11}}>CERRAR SESIÓN / CAMBIAR PIN</button>
+    </div>
+    <div style={{...st.card,background:C.orangeBg,borderColor:C.orange+"44",marginTop:10}}>
+      <div style={{color:C.orange,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>⚠️ CIÁTICO · RECORDATORIO</div>
+      <div style={{color:C.muted,fontSize:12,lineHeight:1.7}}>Si sentís hormigueo hacia la pierna: <strong style={{color:C.danger}}>pará inmediatamente</strong>. Siempre calentamiento + vuelta a la calma.</div>
+    </div>
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── APP ───────────────────────────────────────────────────────
+function PinLock({onUnlock}){
+  var [pin,setPin] = useState("");
+  var [saved,setSaved] = useState(function(){return ls.g("tl-pin")||"";});
+  var [setup,setSetup] = useState(function(){return !ls.g("tl-pin");});
+  var [confirm,setConfirm] = useState("");
+  var [error,setError] = useState("");
+  var [step,setStep] = useState(setup?"create":"enter");
+
+  function handleCreate(){
+    if(pin.length<4){setError("Mínimo 4 dígitos");return;}
+    if(step==="create"){setStep("confirm");setConfirm(pin);setPin("");setError("");}
+    else{
+      if(pin!==confirm){setError("Los PINs no coinciden");setPin("");return;}
+      ls.s("tl-pin",pin);setSaved(pin);setError("");onUnlock();
+    }
+  }
+  function handleEnter(){
+    if(pin===saved){setError("");onUnlock();}
+    else{setError("PIN incorrecto");setPin("");}
+  }
+  function press(d){
+    if(d==="del"){setPin(function(p){return p.slice(0,-1);});}
+    else if(pin.length<6){setPin(function(p){return p+d;});}
+  }
+  var dots = Array.from({length:6},function(_,i){
+    return <div key={i} style={{width:14,height:14,borderRadius:"50%",background:i<pin.length?C.accent:C.border,transition:"background 0.1s"}}/>;
+  });
+  var keys = [["1","2","3"],["4","5","6"],["7","8","9"],["","0","del"]];
+  return <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:32,fontFamily:"system-ui,-apple-system,sans-serif"}}>
+    <div style={{color:C.accent,fontSize:28,fontWeight:800,letterSpacing:4,marginBottom:8}}>TRAINLOG</div>
+    <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:40,fontWeight:700}}>
+      {step==="create"?"CREAR PIN":step==="confirm"?"CONFIRMAR PIN":"INGRESÁ TU PIN"}
+    </div>
+    <div style={{display:"flex",gap:12,marginBottom:32}}>{dots}</div>
+    {error&&<div style={{color:C.danger,fontSize:12,marginBottom:16,fontWeight:600}}>{error}</div>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,72px)",gap:12,marginBottom:32}}>
+      {keys.map(function(row,ri){return row.map(function(k,ki){
+        if(k==="") return <div key={ki}/>;
+        return <button key={ki} onClick={function(){press(k);}} style={{width:72,height:72,borderRadius:"50%",background:k==="del"?"transparent":C.card,border:"1px solid "+(k==="del"?"transparent":C.border),fontSize:k==="del"?20:22,fontWeight:600,cursor:"pointer",color:k==="del"?C.muted:C.text,boxShadow:k==="del"?"none":"0 1px 3px rgba(0,0,0,0.08)"}}>
+          {k==="del"?"⌫":k}
+        </button>;
+      });})  }
+    </div>
+    <button onClick={step==="enter"?handleEnter:handleCreate} disabled={pin.length<4} style={{...st.btn,width:200,opacity:pin.length<4?0.4:1,borderRadius:30}}>
+      {step==="enter"?"ENTRAR":step==="create"?"SIGUIENTE":"CONFIRMAR"}
+    </button>
+    {step==="enter"&&<button onClick={function(){ls.s("tl-pin","");setStep("create");setSetup(true);setPin("");setError("");}} style={{background:"none",border:"none",color:C.muted,fontSize:11,marginTop:20,cursor:"pointer"}}>Cambiar PIN</button>}
+  </div>;
+}
+
+function App(){
+  var [unlocked,setUnlocked] = useState(false);
+  var [tab,setTab] = useState("dashboard");
+  var [logMode,setLogMode] = useState(null);
+  function navTo(newTab, mode){
+    if(mode!==undefined) setLogMode(mode);
+    else setLogMode(null);
+    setTab(newTab);
+  }
+  var [profile,setProfile] = useState(function(){return ls.g("tl-pv5")||{name:"",weight:"",height:"",age:"",gender:"M",goal:""};});
+  var [logs,setLogs] = useState(function(){return (ls.g("tl-lv5")||[]).filter(function(l){return l.type!=="config";});});
+  var [apiKey,setApiKey] = useState(function(){return ls.g("tl-groq-key")||ls.g("tl-gk")||"";});
+  var [sbUrl,setSbUrl] = useState(function(){return ls.g("tl-sb-url")||"";});
+  var [sbKey,setSbKey] = useState(function(){return ls.g("tl-sb-key")||"";});
+  var [sbSyncing,setSbSyncing] = useState(false);
+  var routines = [GTP, DOIT, CASA, NATACION];
+  useEffect(function(){ls.s("tl-pv5",profile);},[profile]);
+  useEffect(function(){ls.s("tl-lv5",logs);},[logs]);
+  useEffect(function(){
+    if(!sbUrl||!sbKey) return;
+    setSbSyncing(true);
+    sbFetch(sbUrl,sbKey).then(function(remote){
+      setLogs(function(prev){
+        // Push local-only logs to Supabase
+        if(remote){
+          var remoteIds = new Set(remote.map(function(r){return r.id;}));
+          prev.forEach(function(l){
+            if(!remoteIds.has(l.id)) sbUpsert(sbUrl,sbKey,l);
+          });
+        }
+        // Merge remote into local
+        if(remote&&remote.length>0){
+          var localIds = new Set(prev.map(function(l){return l.id;}));
+          var merged = prev.concat(remote.filter(function(r){return !localIds.has(r.id);}));
+          merged.sort(function(a,b){return b.date.localeCompare(a.date);});
+          return merged;
+        }
+        return prev;
+      });
+      setSbSyncing(false);
+    }).catch(function(e){console.error("Sync error:",e);setSbSyncing(false);});
+  },[sbUrl,sbKey]);
+  function addLog(l){
+    var nl = Object.assign({},l,{id:Date.now().toString()});
+    setLogs(function(p){return [nl].concat(p);});
+    sbUpsert(sbUrl,sbKey,nl);
+  }
+  if(!unlocked) return <PinLock onUnlock={function(){setUnlocked(true);}}/>;
+  return <div style={{background:C.bg,color:C.text,minHeight:"100vh",fontFamily:"system-ui,-apple-system,sans-serif",maxWidth:480,margin:"0 auto",paddingBottom:64}}>
+    <Header profile={profile} tab={tab}/>
+    <div style={{padding:"16px 14px 0"}}>
+      {tab==="dashboard"&&<Dashboard logs={logs} routines={routines} profile={profile} setProfile={setProfile} nav={navTo}/>}
+      {tab==="cal"&&<Calendar logs={logs} setLogs={setLogs} onNavigate={navTo} sbUrl={sbUrl} sbKey={sbKey}/>}
+      {tab==="log"&&<LogWorkout routines={routines} addLog={addLog} initMode={logMode}/>}
+      {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
+      {tab==="charts"&&<Charts logs={logs}/>}
+      {tab==="ai"&&<AIAssistant logs={logs} profile={profile} routines={routines} apiKey={apiKey} sbUrl={sbUrl} sbKey={sbKey}/>}
+      {tab==="help"&&<Help/>}
+      {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing} addLog={addLog} logs={logs}/>}
+    </div>
+    <Nav tab={tab} set={navTo}/>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
