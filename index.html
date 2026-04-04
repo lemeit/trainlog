@@ -701,16 +701,18 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
   var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
   var tl = actLogs.find(function(l){return l.date===today();});
   var wl = actLogs.filter(function(l){return (new Date()-new Date(l.date+"T12:00:00"))/86400000<=7;});
-    // Foco en natación - modo único
+  var isGym = profile&&profile.modo==="gym";
   var swimRoutine = routines.find(function(r){return r.type==="swimming";});
+  var gymRoutine = routines.find(function(r){return r.type==="gym"&&r.id==="gym-to-pool";}) || routines.find(function(r){return r.type==="gym";});
   var homeRoutine = routines.find(function(r){return r.type==="home";});
-  var R = swimRoutine;
-  var gl = actLogs.filter(function(l){return l.type==="swimming";});
+  var R = isGym ? gymRoutine : swimRoutine;
+  var modeType = isGym ? "gym" : "swimming";
+  // Skip warmup days (index 0,1) for swimming; no skip for gym
+  var gl = actLogs.filter(function(l){return l.type===modeType&&l.status!=="planned";});
   var li = gl[0]&&gl[0].routineDay!=null?gl[0].routineDay:-1;
-  // Saltear calentamientos (índices 0 y 1) para próxima sesión
-  var allDays = R?R.days.length:6;
-  var ni = ((li+1)%allDays);
-  if(ni<2) ni=2;
+  var allDays = R?R.days.length:4;
+  var ni = (li+1)%allDays;
+  if(!isGym && ni<2) ni=2;
   var nd = R&&R.days[ni];
   var plannedToday = actLogs.find(function(l){return l.date===today()&&l.status==="planned";});
   var totalPlanned = actLogs.filter(function(l){return l.status==="planned";}).length;
@@ -1192,10 +1194,11 @@ function History({logs,setLogs,sbUrl,sbKey}){
 }
 
 // ── CALENDAR ─────────────────────────────────────────────────
-function Calendar({logs,onNavigate}){
+function Calendar({logs,onNavigate,onUpdateLog}){
   var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
   var [vd,setVd] = useState(new Date());
   var [sel,setSel] = useState(today());
+  var [calEditing,setCalEditing] = useState(null);
   var yr=vd.getFullYear(), mo=vd.getMonth();
   var monthName = vd.toLocaleDateString("es-AR",{month:"long",year:"numeric"});
   var firstDay = new Date(yr,mo,1).getDay();
@@ -1267,12 +1270,20 @@ function Calendar({logs,onNavigate}){
       </div>
       {!selLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"16px 0",fontSize:12}}>Sin actividad este día</div>}
       {selLogs.map(function(l,i){
+        var isEdit = calEditing===l.id;
         return <div key={i} style={{padding:"10px 0",borderBottom:i<selLogs.length-1?"1px solid "+C.border:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-            <div><div style={{fontSize:13,fontWeight:700}}>{l.label}</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}</div></div>
-            <ChipLog type={l.type} actType={l.activityType} label={l.label}/>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700}}>{l.label}</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}</div></div>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <ChipLog type={l.type} actType={l.activityType} label={l.label}/>
+              <button onClick={function(){setCalEditing(isEdit?null:l.id);}} style={{background:"none",border:"none",color:C.blue,cursor:"pointer",fontSize:14,padding:2,fontWeight:700}}>✏️</button>
+            </div>
           </div>
-          <LogDetail l={l}/>
+          {!isEdit&&<LogDetail l={l}/>}
+          {isEdit&&<HistEdit log={l} onSave={function(updated){
+            onUpdateLog(updated);
+            setCalEditing(null);
+          }} onClose={function(){setCalEditing(null);}}/>}
         </div>;
       })}
     </div>
@@ -2219,6 +2230,18 @@ function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setS
       <div style={{color:C.orange,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>⚠️ CIÁTICO · RECORDATORIO</div>
       <div style={{color:C.muted,fontSize:12,lineHeight:1.7}}>Si sentís hormigueo hacia la pierna: <strong style={{color:C.danger}}>pará inmediatamente</strong>. Siempre calentamiento + vuelta a la calma.</div>
     </div>
+    <div style={{...st.card,background:C.purpleBg,borderColor:C.purple+"44",marginTop:10}}>
+      <div style={{color:C.purple,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>📋 RUTINAS · GESTIÓN</div>
+      <div style={{color:C.muted,fontSize:12,lineHeight:1.7,marginBottom:12}}>
+        Para editar o crear rutinas, editá directamente el archivo <code style={{background:C.card2,padding:"1px 5px",borderRadius:3,fontSize:11}}>index.html</code> en GitHub:
+        <br/>1. Entrá a <strong style={{color:C.purple}}>github.com/lemeit/trainlog</strong>
+        <br/>2. Clic en <strong>index.html</strong> → ícono del lápiz ✏️
+        <br/>3. Buscá el objeto de la rutina que querés cambiar (GTP, DOIT, CASA, NATACION)
+        <br/>4. Modificá nombre, series, reps o notas
+        <br/>5. Commit → la app se actualiza en ~2 min
+      </div>
+      <a href="https://github.com/lemeit/trainlog/edit/main/index.html" target="_blank" rel="noopener noreferrer" style={{...st.ghost,display:"block",textAlign:"center",textDecoration:"none",borderColor:C.purple+"66",color:C.purple}}>EDITAR EN GITHUB ✏️</a>
+    </div>
     <div style={{height:20}}/>
   </div>;
 }
@@ -2329,7 +2352,7 @@ function App(){
     <Header profile={profile} tab={tab}/>
     <div style={{padding:"16px 14px 0"}}>
       {tab==="dashboard"&&<Dashboard logs={logs} routines={routines} profile={profile} setProfile={setProfile} nav={navTo}/>}
-      {tab==="cal"&&<Calendar logs={logs} onNavigate={navTo}/>}
+      {tab==="cal"&&<Calendar logs={logs} onNavigate={navTo} onUpdateLog={function(updated){setLogs(function(p){return p.map(function(l){return l.id===updated.id?updated:l;});});sbUpsert(sbUrl,sbKey,updated);}}/>}
       {tab==="log"&&<LogWorkout routines={routines} addLog={addLog} initMode={logMode}/>}
       {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="charts"&&<Charts logs={logs}/>}
