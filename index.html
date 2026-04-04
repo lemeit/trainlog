@@ -59,6 +59,7 @@ const ls = {
 async function sbUpsert(url,key,log){
   if(!url||!key) return;
   var row = {id:log.id,secret:"tl_x7k9m2",date:log.date,type:log.type,label:log.label||"",
+    status:log.status||"done",
     duration:log.duration||null,distance:log.distance||null,notes:log.notes||"",
     pre_energy:log.preEnergy||null,pre_pain:log.prePain||null,pre_note:log.preNote||"",
     post_energy:log.postEnergy||null,post_note:log.postNote||"",
@@ -89,6 +90,7 @@ async function sbFetch(url,key){
       var p = {};
       try{p=JSON.parse(row.data||"{}");}catch{}
       return {id:row.id,date:row.date,type:row.type,label:row.label,
+        status:row.status||"done",
         duration:row.duration,distance:row.distance,notes:row.notes,
         preEnergy:row.pre_energy,prePain:row.pre_pain,preNote:row.pre_note,
         postEnergy:row.post_energy,postNote:row.post_note,
@@ -111,7 +113,7 @@ async function sbSaveChat(url,key,msgs){
   if(!url||!key) return;
   await fetch(url+"/rest/v1/trainlog",{method:"POST",
     headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+key,"Prefer":"resolution=merge-duplicates,return=minimal"},
-    body:JSON.stringify({id:"__ai_chat__",date:today(),type:"config",label:"ai_history",notes:"",data:JSON.stringify(msgs)})
+    body:JSON.stringify({id:"__ai_chat__",secret:"tl_x7k9m2",date:today(),type:"config",label:"ai_history",notes:"",data:JSON.stringify(msgs)})
   }).catch(function(){});
 }
 async function sbLoadChat(url,key){
@@ -709,7 +711,21 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
   var modeType = isGym ? "gym" : "swimming";
   // Skip warmup days (index 0,1) for swimming; no skip for gym
   var gl = actLogs.filter(function(l){return l.type===modeType&&l.status!=="planned";});
-  var li = gl[0]&&gl[0].routineDay!=null?gl[0].routineDay:-1;
+  // Para determinar próxima sesión: si el log tiene routineDay usarlo, si no (Garmin) buscar por label
+  var lastDone = gl[0];
+  var li = -1;
+  if(lastDone){
+    if(lastDone.routineDay!=null){
+      li = lastDone.routineDay;
+    } else if(R){
+      // Inferir por label: buscar qué día de la rutina matchea el label
+      var matchIdx = R.days.findIndex(function(d){
+        return lastDone.label&&(lastDone.label.toLowerCase().includes(d.name.toLowerCase().slice(0,6))||
+          d.name.toLowerCase().includes((lastDone.label||"").toLowerCase().slice(0,6)));
+      });
+      if(matchIdx>=0) li = matchIdx;
+    }
+  }
   var allDays = R?R.days.length:4;
   var ni = (li+1)%allDays;
   if(!isGym && ni<2) ni=2;
