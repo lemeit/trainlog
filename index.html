@@ -2225,6 +2225,7 @@ function PinLock({onUnlock}){
   var [setup,setSetup] = useState(function(){return !ls.g("tl-pin");});
   var [confirm,setConfirm] = useState("");
   var [error,setError] = useState("");
+  sessionStorage.setItem("tl-unlocked","1");
   var [step,setStep] = useState(setup?"create":"enter");
 
   function handleCreate(){
@@ -2232,11 +2233,11 @@ function PinLock({onUnlock}){
     if(step==="create"){setStep("confirm");setConfirm(pin);setPin("");setError("");}
     else{
       if(pin!==confirm){setError("Los PINs no coinciden");setPin("");return;}
-      ls.s("tl-pin",pin);setSaved(pin);setError("");onUnlock();
+      ls.s("tl-pin",pin);setSaved(pin);setError("");sessionStorage.setItem("tl-unlocked","1");onUnlock();
     }
   }
   function handleEnter(){
-    if(pin===saved){setError("");onUnlock();}
+    if(pin===saved){setError("");sessionStorage.setItem("tl-unlocked","1");onUnlock();}
     else{setError("PIN incorrecto");setPin("");}
   }
   function press(d){
@@ -2270,7 +2271,9 @@ function PinLock({onUnlock}){
 }
 
 function App(){
-  var [unlocked,setUnlocked] = useState(false);
+  var [unlocked,setUnlocked] = useState(function(){
+  return !!sessionStorage.getItem("tl-unlocked");
+});
   var [tab,setTab] = useState("dashboard");
   var [logMode,setLogMode] = useState(null);
   function navTo(newTab, mode){
