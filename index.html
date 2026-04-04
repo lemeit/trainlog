@@ -714,28 +714,33 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
   var nd = R&&R.days[ni];
   var plannedToday = actLogs.find(function(l){return l.date===today()&&l.status==="planned";});
   var totalPlanned = actLogs.filter(function(l){return l.status==="planned";}).length;
+  var trainedToday = actLogs.filter(function(l){return l.date===today()&&l.status!=="planned";});
   return <div>
 
     {R&&<div style={{...st.card,background:DB[ni%4]||C.accentBg,borderColor:DC[ni%4]+"44",marginBottom:12}}>
       <div style={{color:DC[ni%4]||C.accent,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>
-        {tl&&tl.status!=="planned"?"HOY YA ENTRENASTE ✓":plannedToday?"HOY · PLANEADO 📅":"PRÓXIMO ENTRENAMIENTO"}
+        {plannedToday?"HOY · PLANEADO 📅":"PRÓXIMO ENTRENAMIENTO"}
       </div>
-      {tl&&tl.status!=="planned"
-        ?<div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:28}}>✅</span><div><div style={{fontSize:14,fontWeight:700}}>{tl.label}</div><div style={{color:C.muted,fontSize:11}}>{tl.duration?tl.duration+" min":"Completado"}</div></div></div>
-        :plannedToday
-          ?<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{plannedToday.label}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>Ya planeado · completá métricas en Historial</div></div>
-            <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"8px 12px",fontSize:11}} onClick={function(){nav("history");}}>VER →</button>
+      {trainedToday.length>0&&<div style={{borderBottom:"1px solid "+DC[ni%4]+"33",paddingBottom:10,marginBottom:10}}>
+        {trainedToday.map(function(t,i){return <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:i<trainedToday.length-1?6:0}}>
+          <span style={{fontSize:20}}>✅</span>
+          <div><div style={{fontSize:13,fontWeight:700}}>{t.label}</div><div style={{color:C.muted,fontSize:10}}>{t.duration?t.duration+" min":"Completado"}</div></div>
+        </div>;})}
+      </div>}
+      {plannedToday
+        ?<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{plannedToday.label}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>Ya planeado · completá métricas en Historial</div></div>
+          <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"8px 12px",fontSize:11}} onClick={function(){nav("history");}}>VER →</button>
+        </div>
+        :<div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{nd&&nd.name}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>{nd&&nd.exercises.length} ejercicios · {nd&&nd.focus}</div></div>
           </div>
-          :<div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{nd&&nd.name}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>{nd&&nd.exercises.length} ejercicios · {nd&&nd.focus}</div></div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-              <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"8px 4px",fontSize:10,textAlign:"center"}} onClick={function(){nav("log","swimming");}}>📅 PLANEAR</button>
-              <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"8px 4px",fontSize:10,textAlign:"center"}} onClick={function(){nav("log","swimming");}}>▶ REGISTRAR AHORA</button>
-            </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"8px 4px",fontSize:10,textAlign:"center"}} onClick={function(){nav("log","swimming");}}>📅 PLANEAR</button>
+            <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"8px 4px",fontSize:10,textAlign:"center"}} onClick={function(){nav("log","swimming");}}>▶ REGISTRAR AHORA</button>
           </div>
+        </div>
       }
     </div>}
     {totalPlanned>0&&!plannedToday&&<div style={{background:C.orangeBg,border:"1px solid "+C.orange+"44",borderRadius:10,padding:"8px 14px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={function(){nav("history");}}>
@@ -949,7 +954,7 @@ function LogWorkout({routines,addLog,initMode}){
         <div><label style={st.lbl}>FECHA</label><input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={st.inp}/></div>
         <div><label style={st.lbl}>DURACIÓN (min)</label><input type="number" value={dur} onChange={function(e){setDur(e.target.value);}} style={st.inp} placeholder={mode==="swimming"?"50":"30"}/></div>
       </div>
-      {mode==="swimming"&&<div style={{marginBottom:12}}><label style={st.lbl}>DISTANCIA (m)</label><input type="number" value={dist} onChange={function(e){setDist(e.target.value);}} style={st.inp} placeholder="1400"/></div>}
+      {mode==="swimming"&&sd>=2&&<div style={{marginBottom:12}}><label style={st.lbl}>DISTANCIA (m)</label><input type="number" value={dist} onChange={function(e){setDist(e.target.value);}} style={st.inp} placeholder="1400"/></div>}
       <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:60,resize:"none"}} placeholder="Observaciones..."/></div>
       <EstadoForm preE={preE} setPreE={setPreE} pain={pain} setPain={setPain} preN={preN} setPreN={setPreN} postE={postE} setPostE={setPostE} postN={postN} setPostN={setPostN}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
