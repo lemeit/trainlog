@@ -59,7 +59,6 @@ const ls = {
 async function sbUpsert(url,key,log){
   if(!url||!key) return;
   var row = {id:log.id,secret:"tl_x7k9m2",date:log.date,type:log.type,label:log.label||"",
-    status:log.status||"done",
     duration:log.duration||null,distance:log.distance||null,notes:log.notes||"",
     pre_energy:log.preEnergy||null,pre_pain:log.prePain||null,pre_note:log.preNote||"",
     post_energy:log.postEnergy||null,post_note:log.postNote||"",
@@ -90,7 +89,6 @@ async function sbFetch(url,key){
       var p = {};
       try{p=JSON.parse(row.data||"{}");}catch{}
       return {id:row.id,date:row.date,type:row.type,label:row.label,
-        status:row.status||"done",
         duration:row.duration,distance:row.distance,notes:row.notes,
         preEnergy:row.pre_energy,prePain:row.pre_pain,preNote:row.pre_note,
         postEnergy:row.post_energy,postNote:row.post_note,
@@ -113,7 +111,7 @@ async function sbSaveChat(url,key,msgs){
   if(!url||!key) return;
   await fetch(url+"/rest/v1/trainlog",{method:"POST",
     headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+key,"Prefer":"resolution=merge-duplicates,return=minimal"},
-    body:JSON.stringify({id:"__ai_chat__",secret:"tl_x7k9m2",date:today(),type:"config",label:"ai_history",notes:"",data:JSON.stringify(msgs)})
+    body:JSON.stringify({id:"__ai_chat__",date:today(),type:"config",label:"ai_history",notes:"",data:JSON.stringify(msgs)})
   }).catch(function(){});
 }
 async function sbLoadChat(url,key){
@@ -286,6 +284,13 @@ var CASA = {id:"casa-bandas",name:"Bandas en Casa",type:"home",days:[
     {name:"Estiramiento flexores de cadera",sets:2,reps:"40seg/lado",note:"rodilla en piso, cadera adelante",video:YT+"estiramiento+flexores+cadera+ciatico+español"},
     {name:"Estiramiento piramidal",sets:2,reps:"45seg/lado",note:"siempre al final",video:YT+"estiramiento+piramidal+nervio+ciatico+final"},
   ]},
+  {name:"Bloque D · Potencia de brazada",focus:"Fase 2-3 · 20min · Bandas",exercises:[
+    {name:"Simulación crol con banda resistida",sets:3,reps:"10/lado + 20 juntos",note:"des. 45seg · máxima potencia"},
+    {name:"Remo en polea baja con banda",sets:4,reps:"15",note:"imitar fase de tirón del crol"},
+    {name:"Rotadores externos con banda fina",sets:3,reps:"15/lado",note:"prevención hombro nadador"},
+    {name:"Plancha con rotación de cadera",sets:3,reps:"30seg",note:"foco en rotación · transferencia al crol"},
+    {name:"Flutter kick en colchoneta",sets:3,reps:"30seg",note:"boca abajo · patada crol en seco"},
+  ]},
 ]};
 
 var NATACION = {id:"natacion",name:"Natación · Pileta 25m",type:"swimming",days:[
@@ -333,6 +338,40 @@ var NATACION = {id:"natacion",name:"Natación · Pileta 25m",type:"swimming",day
     {name:"Crol muy lento",sets:1,reps:"400m",note:"ritmo de calentamiento",video:YT+"crol+ritmo+lento+recuperacion+natacion"},
     {name:"Pull buoy crol",sets:1,reps:"400m",note:"sin patada, foco en brazada",video:YT+"pull+buoy+crol+foco+brazada+entrenamiento"},
     {name:"Espalda o mixto muy suave",sets:1,reps:"400m",note:"lo que pida el cuerpo",video:YT+"natacion+recuperacion+activa+suave+espalda"},
+  ]},
+  {name:"Sesión E · Fondo continuo",focus:"Fase 2 · Base aeróbica · 2000m · 60min",exercises:[
+    {name:"Entrada crol libre",sets:1,reps:"400m",note:"FC <135, ritmo cómodo"},
+    {name:"Pull buoy + manoplas crol",sets:4,reps:"100m",note:"des. 20seg · brazada larga"},
+    {name:"Crol continuo",sets:1,reps:"600m",note:"ritmo 2:10-2:20 · FC 130-145"},
+    {name:"Tabla pateado sprint",sets:4,reps:"50m",note:"des. 15seg · máxima velocidad"},
+    {name:"Espalda vuelta calma",sets:1,reps:"200m",note:"muy suave"},
+  ]},
+  {name:"Sesión F · Series con tiempo",focus:"Fase 2 · Base aeróbica · 2200m · 65min",exercises:[
+    {name:"Entrada alternada crol/espalda",sets:4,reps:"50m",note:""},
+    {name:"Series crol con tiempo",sets:8,reps:"100m",note:"des. 30seg · objetivo 2:05-2:10 por 100m"},
+    {name:"Pull buoy continuo",sets:1,reps:"400m",note:"sin patada, brazada larga"},
+    {name:"Sprint 25m",sets:6,reps:"25m",note:"des. 20seg · máxima velocidad"},
+    {name:"Espalda suave",sets:1,reps:"200m",note:"vuelta a la calma"},
+  ]},
+  {name:"Sesión G · Técnica + resistencia",focus:"Fase 2 · Base aeróbica · 2000m · 60min",exercises:[
+    {name:"Entrada con aletas",sets:4,reps:"50m",note:"foco posición corporal horizontal"},
+    {name:"Crol con manoplas (sin pull buoy)",sets:4,reps:"100m",note:"foco en agarre del agua"},
+    {name:"Serie mixta crol/espalda/braza",sets:6,reps:"100m",note:"si ciático OK · des. 30seg"},
+    {name:"Pateado espalda con tabla",sets:4,reps:"50m",note:""},
+    {name:"Vuelta calma muy suave",sets:1,reps:"200m",note:""},
+  ]},
+  {name:"Sesión H · Umbral aeróbico",focus:"Fase 3 · Desarrollo · 2800m · 75min",exercises:[
+    {name:"Entrada crol",sets:1,reps:"400m",note:"ritmo suave"},
+    {name:"Pirámide crol",sets:1,reps:"100+200+300+200+100m",note:"des. 30seg entre cada uno · ritmo 2:00-2:05"},
+    {name:"Sprint 25m",sets:8,reps:"25m",note:"des. 15seg · máxima velocidad · medir tiempo"},
+    {name:"Pull buoy fondo",sets:1,reps:"400m",note:""},
+    {name:"Vuelta calma",sets:1,reps:"200m",note:"espalda o crol muy suave"},
+  ]},
+  {name:"Sesión I · Volumen",focus:"Fase 3 · Desarrollo · 3000m · 80min",exercises:[
+    {name:"Entrada crol",sets:1,reps:"400m",note:""},
+    {name:"Bloque principal crol",sets:10,reps:"200m",note:"des. 30seg · FC 135-150"},
+    {name:"Técnica mixta con accesorios",sets:1,reps:"400m",note:"aletas + pull buoy alternado"},
+    {name:"Vuelta calma",sets:1,reps:"200m",note:"muy suave"},
   ]},
 ]};
 
@@ -703,28 +742,25 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
   var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
   var tl = actLogs.find(function(l){return l.date===today();});
   var wl = actLogs.filter(function(l){return (new Date()-new Date(l.date+"T12:00:00"))/86400000<=7;});
-  var isGym = profile&&profile.modo==="gym";
+    // Foco en natación - modo único
   var swimRoutine = routines.find(function(r){return r.type==="swimming";});
-  var gymRoutine = routines.find(function(r){return r.type==="gym"&&r.id==="gym-to-pool";}) || routines.find(function(r){return r.type==="gym";});
   var homeRoutine = routines.find(function(r){return r.type==="home";});
-  var R = isGym ? gymRoutine : swimRoutine;
-  var modeType = isGym ? "gym" : "swimming";
-  // Skip warmup days (index 0,1) for swimming; no skip for gym
-  var gl = actLogs.filter(function(l){return l.type===modeType&&l.status!=="planned";});
+  var R = swimRoutine;
+  var gl = actLogs.filter(function(l){return l.type==="swimming";});
   var li = gl[0]&&gl[0].routineDay!=null?gl[0].routineDay:-1;
-  var allDays = R?R.days.length:4;
-  var ni = (li+1)%allDays;
-  if(!isGym && ni<2) ni=2;
+  // Saltear calentamientos (índices 0 y 1) para próxima sesión
+  var allDays = R?R.days.length:6;
+  var ni = ((li+1)%allDays);
+  if(ni<2) ni=2;
   var nd = R&&R.days[ni];
   var plannedToday = actLogs.find(function(l){return l.date===today()&&l.status==="planned";});
-  var allPlanned = actLogs.filter(function(l){return l.status==="planned";}).sort(function(a,b){return a.date.localeCompare(b.date);});
+  var totalPlanned = actLogs.filter(function(l){return l.status==="planned";}).length;
   var trainedToday = actLogs.filter(function(l){return l.date===today()&&l.status!=="planned";});
-  var [expandedPlan,setExpandedPlan] = useState(null);
   return <div>
 
     {R&&<div style={{...st.card,background:DB[ni%4]||C.accentBg,borderColor:DC[ni%4]+"44",marginBottom:12}}>
       <div style={{color:DC[ni%4]||C.accent,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>
-        PRÓXIMO ENTRENAMIENTO
+        {plannedToday?"HOY · PLANEADO 📅":"PRÓXIMO ENTRENAMIENTO"}
       </div>
       {trainedToday.length>0&&<div style={{borderBottom:"1px solid "+DC[ni%4]+"33",paddingBottom:10,marginBottom:10}}>
         {trainedToday.map(function(t,i){return <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:i<trainedToday.length-1?6:0}}>
@@ -733,54 +769,27 @@ function Dashboard({logs,routines,profile,setProfile,nav}){
         </div>;})}
       </div>}
       {plannedToday
-        ?<div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{plannedToday.label}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>📅 Planeado para hoy</div></div>
-            <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"6px 10px",fontSize:10}} onClick={function(){nav("history");}}>EDITAR →</button>
-          </div>
+        ?<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{plannedToday.label}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>Ya planeado · completá métricas en Historial</div></div>
+          <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"8px 12px",fontSize:11}} onClick={function(){nav("history");}}>VER →</button>
         </div>
-        :<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{nd&&nd.name}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>{nd&&nd.exercises&&nd.exercises.length} ejercicios · {nd&&nd.focus}</div></div>
-          <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"10px 14px",fontSize:11}} onClick={function(){nav("log","swimming");}}>📅 PLANEAR</button>
+        :<div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <div><div style={{fontSize:15,fontWeight:700,color:DC[ni%4]}}>{nd&&nd.name}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>{nd&&nd.exercises.length} ejercicios · {nd&&nd.focus}</div></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"8px 4px",fontSize:10,textAlign:"center"}} onClick={function(){nav("log","swimming");}}>📅 PLANEAR</button>
+            <button style={{...st.ghost,borderColor:DC[ni%4]+"66",color:DC[ni%4],padding:"8px 4px",fontSize:10,textAlign:"center"}} onClick={function(){nav("log","swimming");}}>▶ REGISTRAR AHORA</button>
+          </div>
         </div>
       }
     </div>}
-
-    {allPlanned.length>0&&<div style={{...st.card,borderColor:C.orange+"44",marginBottom:12}}>
-      <div style={{color:C.orange,fontSize:9,letterSpacing:2,marginBottom:10,fontWeight:700}}>📅 SESIONES PLANEADAS · {allPlanned.length}</div>
-      {allPlanned.map(function(l,i){
-        var isExp = expandedPlan===l.id;
-        var routineData = routines.reduce(function(found,r){return found||(r.days&&r.days[l.routineDay]?r.days[l.routineDay]:null);},null);
-        var dayData = routineData;
-        return <div key={l.id} style={{borderBottom:i<allPlanned.length-1?"1px solid "+C.border:"none",paddingBottom:isExp?0:8,marginBottom:isExp?0:4}}>
-          <button onClick={function(){setExpandedPlan(isExp?null:l.id);}} style={{width:"100%",background:"none",border:"none",textAlign:"left",cursor:"pointer",padding:"8px 0 0"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:700,color:C.text}}>{l.label}</div>
-                <div style={{color:C.muted,fontSize:10,marginTop:2}}>{fmtDate(l.date)}{l.notes?" · "+l.notes:""}</div>
-              </div>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{background:l.date===today()?C.accentBg:C.orangeBg,color:l.date===today()?C.accent:C.orange,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:5}}>{l.date===today()?"HOY":l.date>today()?"FUTURO":"VENCIDO"}</span>
-                <span style={{color:C.muted,fontSize:12}}>{isExp?"▲":"▼"}</span>
-              </div>
-            </div>
-          </button>
-          {isExp&&<div style={{paddingTop:8,paddingBottom:10}}>
-            {dayData&&<div style={{marginBottom:8}}>
-              {dayData.exercises&&dayData.exercises.map(function(ex,ei){
-                return <div key={ei} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"1px solid "+C.border+"66",fontSize:11}}>
-                  <span style={{color:C.text}}>{ex.name}{ex.note?<span style={{color:C.muted}}> · {ex.note}</span>:""}</span>
-                  <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
-                    <span style={{color:C.blue,fontWeight:700}}>{ex.sets}×{ex.reps}</span>
-                    <VidBtn url={ex.video}/>
-                  </div>
-                </div>;
-              })}
-            </div>}
-            <button onClick={function(){nav("history");}} style={{...st.ghost,width:"100%",textAlign:"center",fontSize:10,padding:"6px",marginTop:4,borderColor:C.orange+"55",color:C.orange}}>EDITAR ESTA SESIÓN →</button>
-          </div>}
-        </div>;
-      })}
+    {totalPlanned>0&&!plannedToday&&<div style={{background:C.orangeBg,border:"1px solid "+C.orange+"44",borderRadius:10,padding:"8px 14px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={function(){nav("history");}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:14}}>📅</span>
+        <div style={{fontSize:12,color:C.orange,fontWeight:700}}>{totalPlanned} entreno{totalPlanned>1?"s":""} planeado{totalPlanned>1?"s":""} sin completar</div>
+      </div>
+      <span style={{color:C.orange,fontSize:12,fontWeight:700}}>VER →</span>
     </div>}
     {homeRoutine&&<div style={{...st.card,background:C.purpleBg,borderColor:C.purple+"44",marginBottom:12}}>
       <div style={{color:C.purple,fontSize:9,letterSpacing:2,marginBottom:6,fontWeight:700}}>💪 BANDAS EN CASA · {homeRoutine.days.length} BLOQUES</div>
@@ -890,6 +899,7 @@ function tomorrow(){
 function LogWorkout({routines,addLog,initMode}){
   var [mode,setMode] = useState(initMode||null);
   var [sr,setSr] = useState(routines[0]&&routines[0].id||"");
+  useEffect(function(){setMode(initMode||null);setSd(0);},[initMode]);
   var [sd,setSd] = useState(0);
   var [sets,setSets] = useState({});
   var [dur,setDur] = useState("");
@@ -912,7 +922,7 @@ function LogWorkout({routines,addLog,initMode}){
     setSets(o);
   },[sd,sr]);
   function upd(ei,si,f,v){setSets(function(p){var n=Object.assign({},p);n[ei]=p[ei].map(function(s,i){return i===si?Object.assign({},s,{[f]:v}):s;});return n;});}
-  function resetAll(){setDone(false);setMode(null);setDur("");setNotes("");setDist("");setFecha(today());setPreE(3);setPain(0);setPreN("");setPostE(3);setPostN("");}
+  function resetAll(){setDone(false);setMode(null);setSd(0);setDur("");setNotes("");setDist("");setFecha(today());setPreE(3);setPain(0);setPreN("");setPostE(3);setPostN("");}
   var estado = {preEnergy:preE,prePain:pain,preNote:preN,postEnergy:postE,postNote:postN};
   function saveG(){
     addLog(Object.assign({date:fecha||today(),type:"gym",routineId:sr,routineDay:sd,label:D&&D.name||"Entrenamiento",duration:dur||null,notes:notes,exercises:D?D.exercises.map(function(ex,i){return {name:ex.name,sets:sets[i]||[]};}):[],status:"done"},estado));
@@ -929,12 +939,12 @@ function LogWorkout({routines,addLog,initMode}){
   }
   if(done) return <div style={{textAlign:"center",padding:"80px 20px"}}><div style={{fontSize:52}}>✅</div><div style={{color:C.accent,fontSize:20,fontWeight:800,marginTop:12}}>¡GUARDADO!</div></div>;
   if(!mode) return <div>
-    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:16,fontWeight:700}}>PLANIFICAR SESIÓN</div>
+    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:16,fontWeight:700}}>¿QUÉ REGISTRÁS HOY?</div>
     {[
-      {id:"gym",    icon:"🏋️", label:"Gimnasio",       desc:"Planear bloque · cargas se registran acá",     color:C.green,  bg:C.greenBg},
-      {id:"swimming",icon:"🏊",label:"Natación",        desc:"Planear sesión · métricas vienen del Garmin",  color:C.blue,   bg:C.blueBg},
-      {id:"home",   icon:"💪", label:"Bandas en casa",  desc:"Planear bloque · bandas elásticas",            color:C.purple, bg:C.purpleBg},
-      {id:"activity",icon:"🚴",label:"Otra actividad",  desc:"Planear · métricas vienen del Garmin",         color:C.orange, bg:C.orangeBg},
+      {id:"gym",    icon:"🏋️", label:"Gimnasio",        desc:"Series, reps y cargas · GTP o DoIt",  color:C.green,  bg:C.greenBg},
+      {id:"swimming",icon:"🏊",label:"Natación",         desc:"Sesiones en pileta + calentamiento",  color:C.blue,   bg:C.blueBg},
+      {id:"home",   icon:"💪", label:"Bandas en casa",   desc:"Bloques A · B · C con bandas elásticas", color:C.purple, bg:C.purpleBg},
+      {id:"activity",icon:"🚴",label:"Otra actividad",   desc:"Ciclismo · Caminata · Running",       color:C.orange, bg:C.orangeBg},
     ].map(function(x){
       return <button key={x.id} onClick={function(){setMode(x.id);}} style={{...st.card,display:"flex",gap:14,alignItems:"center",width:"100%",textAlign:"left",cursor:"pointer",borderLeft:"4px solid "+x.color,background:x.bg+"88",marginBottom:10}}>
         <span style={{fontSize:34}}>{x.icon}</span>
@@ -959,57 +969,70 @@ function LogWorkout({routines,addLog,initMode}){
     var modeDay = modeR.days[sd]||modeR.days[0];
     return <div>
       <Back fn={function(){setMode(null);}}/>
-      <div style={{...st.card,background:modeColor+"11",borderColor:modeColor+"33",marginBottom:14,padding:"10px 14px"}}>
-        <div style={{fontSize:11,color:modeColor,fontWeight:700,marginBottom:3}}>📅 PLANIFICACIÓN DE SESIÓN</div>
-        <div style={{fontSize:11,color:C.muted}}>Las métricas (tiempo, distancia, FC) se importan del CSV del Garmin.</div>
-      </div>
-      <div style={{marginBottom:12}}>
+      <div style={{marginBottom:14}}>
         <label style={st.lbl}>BLOQUE</label>
         <select value={sd} onChange={function(e){setSd(Number(e.target.value));}} style={st.inp}>
           {modeR.days.map(function(d,i){return <option key={i} value={i}>{d.name}</option>;})}
         </select>
       </div>
-      <div style={{background:modeBg,borderLeft:"4px solid "+modeColor,padding:"10px 12px",borderRadius:"0 8px 8px 0",marginBottom:14}}>
+      <div style={{background:modeBg,borderLeft:"4px solid "+modeColor,padding:"10px 12px",borderRadius:"0 8px 8px 0",marginBottom:16}}>
         <div style={{fontSize:14,fontWeight:700,color:modeColor}}>{modeDay.name}</div>
         <div style={{color:C.muted,fontSize:11,marginTop:2}}>{modeDay.focus}</div>
-        <div style={{marginTop:10}}>
-          {modeDay.exercises.map(function(ex,ei){
-            return <div key={ei} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"1px solid "+modeColor+"22",fontSize:11}}>
-              <span>{ex.name}{ex.note?<span style={{color:C.muted}}> · {ex.note}</span>:""}</span>
+      </div>
+      <div style={{...st.card,background:modeBg,borderColor:modeColor+"33",marginBottom:14}}>
+        {modeDay.exercises.map(function(ex,ei){
+          return <div key={ei} style={{padding:"6px 0",borderBottom:"1px solid "+C.border+"88",fontSize:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{flex:1,fontWeight:600}}>{ex.name}{ex.note?<span style={{color:C.muted,fontWeight:400}}> · {ex.note}</span>:""}</span>
               <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                <span style={{color:modeColor,fontWeight:700}}>{ex.sets}×{ex.reps}</span>
+                <span style={{color:modeColor,fontWeight:700,fontSize:11}}>{ex.sets}×{ex.reps}</span>
                 <VidBtn url={ex.video}/>
               </div>
-            </div>;
-          })}
-        </div>
+            </div>
+          </div>;
+        })}
       </div>
-      <div style={{marginBottom:12}}><label style={st.lbl}>FECHA</label><input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={st.inp}/></div>
-      <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS (opcional)</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:56,resize:"none"}} placeholder="Objetivos, condición física, recordatorios..."/></div>
-      <button style={{...st.btn,background:modeColor}} onClick={function(){
-        addLog({date:fecha||today(),type:mode,routineId:modeR.id,routineDay:sd,
-          label:modeIcon+" "+modeDay.name,duration:null,distance:null,notes:notes,status:"planned"});
-        setDone(true);setTimeout(resetAll,2000);
-      }}>📅 PLANEAR SESIÓN</button>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        <div><label style={st.lbl}>FECHA</label><input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={st.inp}/></div>
+        <div><label style={st.lbl}>DURACIÓN (min)</label><input type="number" value={dur} onChange={function(e){setDur(e.target.value);}} style={st.inp} placeholder={mode==="swimming"?"50":"30"}/></div>
+      </div>
+      {mode==="swimming"&&sd>=2&&<div style={{marginBottom:12}}><label style={st.lbl}>DISTANCIA (m)</label><input type="number" value={dist} onChange={function(e){setDist(e.target.value);}} style={st.inp} placeholder="1400"/></div>}
+      <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:60,resize:"none"}} placeholder="Observaciones..."/></div>
+      <EstadoForm preE={preE} setPreE={setPreE} pain={pain} setPain={setPain} preN={preN} setPreN={setPreN} postE={postE} setPostE={setPostE} postN={postN} setPostN={setPostN}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+        <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"12px",textAlign:"center",fontSize:12}} onClick={function(){
+          addLog(Object.assign({date:fecha||today(),type:mode,routineId:modeR.id,routineDay:sd,
+            label:modeIcon+" "+modeDay.name,
+            duration:null,distance:null,notes:notes,status:"planned"},estado));
+          setDone(true);setTimeout(resetAll,2000);
+        }}>📅 GUARDAR COMO PLANEADO</button>
+        <button style={{...st.btn,background:modeColor}} onClick={function(){
+          addLog(Object.assign({date:fecha||today(),type:mode,routineId:modeR.id,routineDay:sd,
+            label:modeIcon+" "+modeDay.name,
+            duration:dur||null,distance:dist||null,notes:notes,status:"done"},estado));
+          setDone(true);setTimeout(resetAll,2000);
+        }}>GUARDAR {mode==="swimming"?"PILETA":"CASA"} ✓</button>
+      </div>
       <div style={{height:20}}/>
     </div>;
   }
 
   if(mode==="activity") return <div>
     <Back fn={function(){setMode(null);}}/>
-    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:16,fontWeight:700}}>PLANEAR ACTIVIDAD</div>
-    <div style={{marginBottom:12}}><label style={st.lbl}>FECHA</label><input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={st.inp}/></div>
+    <div style={{color:C.muted,fontSize:9,letterSpacing:2,marginBottom:16,fontWeight:700}}>REGISTRAR ACTIVIDAD</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+      <div><label style={st.lbl}>FECHA</label><input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={st.inp}/></div>
+      <div><label style={st.lbl}>DURACIÓN (min)</label><input type="number" value={dur} onChange={function(e){setDur(e.target.value);}} style={st.inp} placeholder="45"/></div>
+    </div>
     <div style={{marginBottom:12}}><label style={st.lbl}>TIPO</label>
       <select value={at} onChange={function(e){setAt(e.target.value);}} style={st.inp}>
         {[["running","🏃 Running / Carrera"],["cycling","🚴 Ciclismo / Bici"],["walking","🚶 Caminata"],["other","⚡ Otra"]].map(function(x){return <option key={x[0]} value={x[0]}>{x[1]}</option>;})}
       </select>
     </div>
-    <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS (opcional)</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:60,resize:"none"}} placeholder="Objetivos, recorrido..."/></div>
-    <button style={st.btn} onClick={function(){
-      var L={running:"Carrera",cycling:"Ciclismo",walking:"Caminata",other:"Actividad"};
-      addLog({date:fecha||today(),type:"activity",activityType:at,label:L[at]||"Actividad",duration:null,distance:null,notes:notes,status:"planned"});
-      setDone(true);setTimeout(resetAll,2000);
-    }}>📅 PLANEAR ACTIVIDAD</button>
+    <div style={{marginBottom:12}}><label style={st.lbl}>DISTANCIA (km)</label><input type="number" value={dist} onChange={function(e){setDist(e.target.value);}} style={st.inp} placeholder="5.0"/></div>
+    <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:70,resize:"none"}} placeholder="¿Cómo resultó?"/></div>
+    <EstadoForm preE={preE} setPreE={setPreE} pain={pain} setPain={setPain} preN={preN} setPreN={setPreN} postE={postE} setPostE={setPostE} postN={postN} setPostN={setPostN}/>
+    <button style={st.btn} onClick={saveA}>GUARDAR ACTIVIDAD</button>
   </div>;
   if(!D) return <div style={{color:C.muted,textAlign:"center",padding:40}}>Sin rutina</div>;
   return <div>
@@ -1061,8 +1084,8 @@ function LogWorkout({routines,addLog,initMode}){
     <div style={{marginBottom:16}}><label style={st.lbl}>NOTAS</label><textarea value={notes} onChange={function(e){setNotes(e.target.value);}} style={{...st.inp,height:70,resize:"none"}} placeholder="Observaciones..."/></div>
     <EstadoForm preE={preE} setPreE={setPreE} pain={pain} setPain={setPain} preN={preN} setPreN={setPreN} postE={postE} setPostE={setPostE} postN={postN} setPostN={setPostN}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-      <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"12px",textAlign:"center",fontSize:12}} onClick={saveGPlan}>📅 PLANEAR</button>
-      <button style={st.btn} onClick={saveG}>GUARDAR CON CARGAS ✓</button>
+      <button style={{...st.ghost,borderColor:C.orange+"66",color:C.orange,padding:"12px",textAlign:"center",fontSize:12}} onClick={saveGPlan}>📅 GUARDAR PLANEADO</button>
+      <button style={st.btn} onClick={saveG}>GUARDAR ✓</button>
     </div>
     <div style={{height:20}}/>
   </div>;
@@ -1211,11 +1234,10 @@ function History({logs,setLogs,sbUrl,sbKey}){
 }
 
 // ── CALENDAR ─────────────────────────────────────────────────
-function Calendar({logs,onNavigate,onUpdateLog}){
+function Calendar({logs,onNavigate}){
   var actLogs = logs.filter(function(l){return l.type!=="sleep"&&l.type!=="config"&&l.type!=="food";});
   var [vd,setVd] = useState(new Date());
   var [sel,setSel] = useState(today());
-  var [calEditing,setCalEditing] = useState(null);
   var yr=vd.getFullYear(), mo=vd.getMonth();
   var monthName = vd.toLocaleDateString("es-AR",{month:"long",year:"numeric"});
   var firstDay = new Date(yr,mo,1).getDay();
@@ -1287,20 +1309,12 @@ function Calendar({logs,onNavigate,onUpdateLog}){
       </div>
       {!selLogs.length&&<div style={{textAlign:"center",color:C.muted,padding:"16px 0",fontSize:12}}>Sin actividad este día</div>}
       {selLogs.map(function(l,i){
-        var isEdit = calEditing===l.id;
         return <div key={i} style={{padding:"10px 0",borderBottom:i<selLogs.length-1?"1px solid "+C.border:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700}}>{l.label}</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}</div></div>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <ChipLog type={l.type} actType={l.activityType} label={l.label}/>
-              <button onClick={function(){setCalEditing(isEdit?null:l.id);}} style={{background:"none",border:"none",color:C.blue,cursor:"pointer",fontSize:14,padding:2,fontWeight:700}}>✏️</button>
-            </div>
+            <div><div style={{fontSize:13,fontWeight:700}}>{l.label}</div><div style={{color:C.muted,fontSize:10,marginTop:2}}>{l.duration?l.duration+" min":""}{l.distance?" · "+l.distance+"km":""}</div></div>
+            <ChipLog type={l.type} actType={l.activityType} label={l.label}/>
           </div>
-          {!isEdit&&<LogDetail l={l}/>}
-          {isEdit&&<HistEdit log={l} onSave={function(updated){
-            onUpdateLog(updated);
-            setCalEditing(null);
-          }} onClose={function(){setCalEditing(null);}}/>}
+          <LogDetail l={l}/>
         </div>;
       })}
     </div>
@@ -1808,42 +1822,20 @@ function GarminImporter({logs,onImport}){
     reader.onload = function(ev){
       try{
         var parsed = parseGarminCSV(ev.target.result);
+        // IDs existentes en el historial
         var existingIds = new Set(logs.map(function(l){return l.id;}));
-        var existingKeys = new Set(logs.filter(function(l){return l.status!=="planned";}).map(function(l){return l.date+"_"+l.type;}));
-        // Sesiones planeadas indexadas por fecha+tipo
-        var plannedByDateType = {};
-        logs.forEach(function(l){
-          if(l.status==="planned"){
-            var k = l.date+"_"+l.type;
-            if(!plannedByDateType[k]) plannedByDateType[k]=[];
-            plannedByDateType[k].push(Object.assign({},l));
-          }
-        });
+        // También chequear por fecha+label para actividades manuales
+        var existingKeys = new Set(logs.map(function(l){return l.date+"_"+l.label;}));
         var nuevas = [];
         var duplicadas = 0;
-        var fusionadas = [];
         parsed.forEach(function(act){
-          if(existingIds.has(act.id)||existingKeys.has(act.date+"_"+act.type)){
-            duplicadas++; return;
-          }
-          var plans = plannedByDateType[act.date+"_"+act.type]||[];
-          if(plans.length>0){
-            var plan = plans.shift();
-            fusionadas.push({
-              plan: plan,
-              garmin: act,
-              merged: Object.assign({},plan,{
-                duration:act.duration||plan.duration,
-                distance:act.distance||plan.distance,
-                calories:act.calories,hrAvg:act.hrAvg,hrMax:act.hrMax,
-                bodyBatDrop:act.bodyBatDrop,source:"garmin",status:"done"
-              })
-            });
+          if(existingIds.has(act.id)||existingKeys.has(act.date+"_"+act.label)){
+            duplicadas++;
           } else {
             nuevas.push(act);
           }
         });
-        setResult({nuevas:nuevas,duplicadas:duplicadas,fusionadas:fusionadas,total:parsed.length});
+        setResult({nuevas:nuevas,duplicadas:duplicadas,total:parsed.length});
         setLoading(false);
       }catch(err){
         setResult({error:"Error al leer el archivo: "+err.message});
@@ -1853,18 +1845,16 @@ function GarminImporter({logs,onImport}){
     reader.readAsText(file,"UTF-8");
   }
   function confirmar(){
-    if(!result) return;
+    if(!result||!result.nuevas) return;
     result.nuevas.forEach(function(act){onImport(act);});
-    result.fusionadas.forEach(function(f){onImport(f.merged);});
     setResult(Object.assign({},result,{importado:true}));
     if(fileRef.current) fileRef.current.value="";
   }
-  var total = result?(result.nuevas.length+(result.fusionadas||[]).length):0;
   return <div style={{...st.card,background:"#f0f7ff",borderColor:C.blue+"44",marginTop:10}}>
     <div style={{color:C.blue,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>⌚ IMPORTAR DESDE GARMIN CONNECT</div>
     <div style={{color:C.muted,fontSize:11,lineHeight:1.8,marginBottom:12}}>
       En <strong style={{color:C.blue}}>connect.garmin.com</strong> → Actividades → Todas las actividades → Exportar CSV.<br/>
-      Si hay sesiones planeadas para esa fecha, se fusionan automáticamente con las métricas del Garmin.
+      Podés subir el mismo archivo todas las semanas — solo importa las actividades nuevas.
     </div>
     <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}} id="garmin-file"/>
     <label htmlFor="garmin-file" style={{...st.btn,background:C.blue,display:"block",textAlign:"center",cursor:"pointer",marginBottom:result?10:0}}>
@@ -1872,38 +1862,37 @@ function GarminImporter({logs,onImport}){
     </label>
     {result&&!result.error&&!result.importado&&<div style={{marginTop:10}}>
       <div style={{...st.card,background:C.card2,padding:12,marginBottom:8}}>
-        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Resumen:</div>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Resumen del archivo:</div>
         <div style={{fontSize:12,color:C.text,lineHeight:2}}>
-          📋 Total en archivo: <strong>{result.total}</strong><br/>
-          {result.fusionadas.length>0&&<span>🔗 Fusionan con sesión planeada: <strong style={{color:C.green}}>{result.fusionadas.length}</strong><br/></span>}
-          ✅ Nuevas sin plan: <strong style={{color:C.blue}}>{result.nuevas.length}</strong><br/>
-          ⏭️ Ya existían: <strong style={{color:C.muted}}>{result.duplicadas}</strong>
+          📋 Total actividades: <strong>{result.total}</strong><br/>
+          ✅ Nuevas para importar: <strong style={{color:C.green}}>{result.nuevas.length}</strong><br/>
+          ⏭️ Ya existían (ignoradas): <strong style={{color:C.muted}}>{result.duplicadas}</strong>
         </div>
       </div>
-      {result.fusionadas.length>0&&<div style={{...st.card,background:C.greenBg,borderColor:C.green+"33",padding:10,marginBottom:8}}>
-        <div style={{fontSize:10,fontWeight:700,color:C.green,marginBottom:6}}>🔗 SESIONES A FUSIONAR</div>
-        {result.fusionadas.map(function(f,i){
-          return <div key={i} style={{fontSize:11,padding:"4px 0",borderBottom:"1px solid "+C.green+"33",display:"flex",justifyContent:"space-between"}}>
-            <span style={{fontWeight:700}}>{f.plan.label} <span style={{color:C.muted,fontWeight:400}}>· {f.plan.date}</span></span>
-            <span style={{color:C.blue}}>{f.garmin.duration&&f.garmin.duration+"min"}{f.garmin.hrAvg&&" ♥"+f.garmin.hrAvg}</span>
-          </div>;
-        })}
+      {result.nuevas.length>0&&<div>
+        <div style={{maxHeight:160,overflowY:"auto",marginBottom:10}}>
+          {result.nuevas.map(function(a,i){
+            return <div key={i} style={{fontSize:11,padding:"5px 0",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <span style={{fontWeight:700}}>{a.label}</span>
+                <span style={{color:C.muted}}> · {a.date}</span>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {a.duration&&<span style={{color:C.blue,fontSize:10}}>{a.duration}min</span>}
+                {a.calories&&<span style={{color:C.orange,fontSize:10}}>{a.calories}kcal</span>}
+                {a.hrAvg&&<span style={{color:C.danger,fontSize:10}}>♥{a.hrAvg}</span>}
+              </div>
+            </div>;
+          })}
+        </div>
+        <button onClick={confirmar} style={{...st.btn,background:C.green}}>
+          IMPORTAR {result.nuevas.length} ACTIVIDAD{result.nuevas.length!==1?"ES":""}
+        </button>
       </div>}
-      {result.nuevas.length>0&&<div style={{maxHeight:120,overflowY:"auto",marginBottom:10}}>
-        {result.nuevas.map(function(a,i){
-          return <div key={i} style={{fontSize:11,padding:"5px 0",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between"}}>
-            <span><strong>{a.label}</strong> <span style={{color:C.muted}}>· {a.date}</span></span>
-            <span style={{color:C.blue,fontSize:10}}>{a.duration&&a.duration+"min"}{a.hrAvg&&" ♥"+a.hrAvg}</span>
-          </div>;
-        })}
-      </div>}
-      {total>0&&<button onClick={confirmar} style={{...st.btn,background:C.green}}>
-        IMPORTAR {total} ACTIVIDAD{total!==1?"ES":""}
-      </button>}
-      {total===0&&<div style={{textAlign:"center",color:C.muted,fontSize:12,padding:"10px 0"}}>No hay actividades nuevas para importar.</div>}
+      {result.nuevas.length===0&&<div style={{textAlign:"center",color:C.muted,fontSize:12,padding:"10px 0"}}>No hay actividades nuevas para importar.</div>}
     </div>}
     {result&&result.importado&&<div style={{...st.card,background:C.greenBg,borderColor:C.green+"44",padding:12,marginTop:8,textAlign:"center"}}>
-      <div style={{color:C.green,fontWeight:700,fontSize:13}}>✅ {total} actividad{total!==1?"es":""} importada{total!==1?"s":""} · {(result.fusionadas||[]).length} fusionada{(result.fusionadas||[]).length!==1?"s":""}</div>
+      <div style={{color:C.green,fontWeight:700,fontSize:13}}>✅ {result.nuevas.length} actividad{result.nuevas.length!==1?"es":""}  importada{result.nuevas.length!==1?"s":""} correctamente</div>
     </div>}
     {result&&result.error&&<div style={{color:C.danger,fontSize:12,marginTop:8,fontWeight:600}}>{result.error}</div>}
   </div>;
@@ -2218,7 +2207,7 @@ function Help(){
 }
 
 // ── SETTINGS ─────────────────────────────────────────────────
-function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setSbKey,sbSyncing,addLog,upsertLog,logs}){
+function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setSbKey,sbSyncing,addLog,logs}){
   var [ki,setKi] = useState(apiKey);
   var [su,setSu] = useState(sbUrl);
   var [sk,setSk] = useState(sbKey);
@@ -2254,7 +2243,7 @@ function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setS
       {sbUrl&&sbKey&&<div style={{marginTop:8}}><div style={{color:C.green,fontSize:11,fontWeight:700,textAlign:"center",marginBottom:8}}>{sbSyncing?"⏳ Sincronizando...":"✓ Supabase configurado"}</div><button onClick={function(){fetch(sbUrl+"/rest/v1/trainlog?select=count",{headers:{"apikey":sbKey,"Authorization":"Bearer "+sbKey,"Prefer":"count=exact"}}).then(function(r){var count=r.headers.get("content-range");return r.json().then(function(d){return {d:d,count:count,ok:r.ok,status:r.status};});}).then(function(x){if(x.ok){alert("✅ Conexión OK\nRegistros en Supabase: "+(x.count?x.count.split("/")[1]||"0":"0")+"\n\nSi ves 0 registros aunque cargaste actividades, el problema es RLS (Row Level Security). Desactivalo en Supabase: Authentication → Policies → trainlog → Disable RLS");}else{alert("❌ Error "+x.status+"\n"+JSON.stringify(x.d)+"\n\nVerificá que la URL y la key sean correctas");}}).catch(function(e){alert("❌ Sin conexión: "+e.message);});}} style={{...st.ghost,width:"100%",textAlign:"center",borderColor:C.blue+"44",color:C.blue,fontSize:11,marginTop:4}}>VERIFICAR CONEXION</button></div>}
     </div>
     <SleepImporter logs={logs} onImport={addLog}/>
-    <GarminImporter logs={logs} onImport={upsertLog||addLog}/>
+    <GarminImporter logs={logs} onImport={addLog}/>
     <div style={{...st.card,background:C.greenBg,borderColor:C.green+"44",marginTop:10}}>
       <div style={{color:C.green,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>📊 EXPORTAR A GOOGLE SHEETS</div>
       <div style={{color:C.muted,fontSize:12,lineHeight:1.7}}>Historial → <strong style={{color:C.text}}>Exportar CSV</strong> → importar en Sheets: Archivo → Importar → Subir archivo.</div>
@@ -2271,18 +2260,6 @@ function Settings({profile,setProfile,apiKey,setApiKey,sbUrl,setSbUrl,sbKey,setS
     <div style={{...st.card,background:C.orangeBg,borderColor:C.orange+"44",marginTop:10}}>
       <div style={{color:C.orange,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>⚠️ CIÁTICO · RECORDATORIO</div>
       <div style={{color:C.muted,fontSize:12,lineHeight:1.7}}>Si sentís hormigueo hacia la pierna: <strong style={{color:C.danger}}>pará inmediatamente</strong>. Siempre calentamiento + vuelta a la calma.</div>
-    </div>
-    <div style={{...st.card,background:C.purpleBg,borderColor:C.purple+"44",marginTop:10}}>
-      <div style={{color:C.purple,fontSize:9,letterSpacing:2,marginBottom:8,fontWeight:700}}>📋 RUTINAS · GESTIÓN</div>
-      <div style={{color:C.muted,fontSize:12,lineHeight:1.7,marginBottom:12}}>
-        Para editar o crear rutinas, editá directamente el archivo <code style={{background:C.card2,padding:"1px 5px",borderRadius:3,fontSize:11}}>index.html</code> en GitHub:
-        <br/>1. Entrá a <strong style={{color:C.purple}}>github.com/lemeit/trainlog</strong>
-        <br/>2. Clic en <strong>index.html</strong> → ícono del lápiz ✏️
-        <br/>3. Buscá el objeto de la rutina que querés cambiar (GTP, DOIT, CASA, NATACION)
-        <br/>4. Modificá nombre, series, reps o notas
-        <br/>5. Commit → la app se actualiza en ~2 min
-      </div>
-      <a href="https://github.com/lemeit/trainlog/edit/main/index.html" target="_blank" rel="noopener noreferrer" style={{...st.ghost,display:"block",textAlign:"center",textDecoration:"none",borderColor:C.purple+"66",color:C.purple}}>EDITAR EN GITHUB ✏️</a>
     </div>
     <div style={{height:20}}/>
   </div>;
@@ -2389,29 +2366,19 @@ function App(){
     setLogs(function(p){return [nl].concat(p);});
     sbUpsert(sbUrl,sbKey,nl);
   }
-  // Para fusión Garmin: si el log ya tiene ID existente, reemplaza en vez de insertar nuevo
-  function upsertLog(l){
-    var ids = logs.map(function(x){return x.id;});
-    if(l.id&&ids.indexOf(l.id)>=0){
-      setLogs(function(p){return p.map(function(x){return x.id===l.id?l:x;});});
-      sbUpsert(sbUrl,sbKey,l);
-    } else {
-      addLog(l);
-    }
-  }
   if(!unlocked) return <PinLock onUnlock={function(){setUnlocked(true);}}/>;
   return <div style={{background:C.bg,color:C.text,minHeight:"100vh",fontFamily:"system-ui,-apple-system,sans-serif",maxWidth:480,margin:"0 auto",paddingBottom:64}}>
     <Header profile={profile} tab={tab}/>
     <div style={{padding:"16px 14px 0"}}>
       {tab==="dashboard"&&<Dashboard logs={logs} routines={routines} profile={profile} setProfile={setProfile} nav={navTo}/>}
-      {tab==="cal"&&<Calendar logs={logs} onNavigate={navTo} onUpdateLog={function(updated){setLogs(function(p){return p.map(function(l){return l.id===updated.id?updated:l;});});sbUpsert(sbUrl,sbKey,updated);}}/>}
+      {tab==="cal"&&<Calendar logs={logs} onNavigate={navTo}/>}
       {tab==="log"&&<LogWorkout routines={routines} addLog={addLog} initMode={logMode}/>}
       {tab==="history"&&<History logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="charts"&&<Charts logs={logs}/>}
       {tab==="food"&&<FoodLog logs={logs} setLogs={setLogs} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="ai"&&<AIAssistant logs={logs} profile={profile} routines={routines} apiKey={apiKey} sbUrl={sbUrl} sbKey={sbKey}/>}
       {tab==="help"&&<Help/>}
-      {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing} addLog={addLog} upsertLog={upsertLog} logs={logs}/>}
+      {tab==="settings"&&<Settings profile={profile} setProfile={setProfile} apiKey={apiKey} setApiKey={setApiKey} sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} sbSyncing={sbSyncing} addLog={addLog} logs={logs}/>}
     </div>
     <Nav tab={tab} set={navTo}/>
   </div>;
