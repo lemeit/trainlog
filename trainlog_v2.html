@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<meta name="theme-color" content="#ffffff"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="TRAINLOG"/>
+<title>TRAINLOG · Luciano</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#f7f8fa;font-family:system-ui,-apple-system,sans-serif;color:#1a1a1a;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+input,select,textarea,button{font-family:inherit}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#ddd;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback} = React;
+
+// ── COLORES ──────────────────────────────────────────────────
+const C = {
+  bg:"#f7f8fa", card:"#ffffff", border:"#e8eaed",
+  pool:"#1565c0", poolBg:"#e3f0fd",
+  dry:"#2e7d32", dryBg:"#e8f5e9",
+  rest:"#6d4c41", restBg:"#fbe9e7",
+  accent:"#1565c0",
+  text:"#1a1a1a", muted:"#777", muted2:"#aaa",
+  green:"#2e7d32", greenBg:"#e8f5e9",
+  orange:"#e65100", orangeBg:"#fff3e0",
+  red:"#c62828", redBg:"#ffebee",
+  purple:"#4527a0", purpleBg:"#ede7f6",
+};
+
+// ── STORAGE ──────────────────────────────────────────────────
+const ls = {
+  g(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch{return null}},
+  s(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+};
+
+// ── SUPABASE ─────────────────────────────────────────────────
+async function sbUpsert(url,key,log){
+  if(!url||!key) return;
+  const row = {
+    id:log.id, secret:"tl_x7k9m2", date:log.date, type:log.type,
+    label:log.label||"", duration:log.duration||null,
+    distance:log.distance||null, notes:log.notes||"",
+    pre_energy:log.preEnergy||null, pre_pain:log.prePain||null,
+    pre_note:log.preNote||"", post_energy:log.postEnergy||null,
+    post_note:log.postNote||"",
+    data:JSON.stringify({
+      sessionKey:log.sessionKey, blocks:log.blocks,
+      dist:log.dist, fc:log.fc, fcMax:log.fcMax,
+      swolf:log.swolf, kcal:log.kcal, feel:log.feel,
+      ciatico:log.ciatico, source:log.source,
+      // sueño
+      sleepScore:log.sleepScore, hrRest:log.hrRest,
+      bodyBatMorning:log.bodyBatMorning, spo2:log.spo2,
+      hrv:log.hrv, sleepQuality:log.sleepQuality,
+    })
+  };
+  try{
+    await fetch(url+"/rest/v1/trainlog",{method:"POST",
+      headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+key,"Prefer":"resolution=merge-duplicates,return=minimal"},
+      body:JSON.stringify(row)});
+  }catch(e){console.error("SB upsert:",e);}
+}
+async function sbDelete(url,key,id){
+  if(!url||!key) return;
+  await fetch(url+"/rest/v1/trainlog?id=eq."+id,{method:"DELETE",
+    headers:{"apikey":key,"Authorization":"Bearer "+key}}).catch(()=>{});
+}
+async function sbFetch(url,key){
+  if(!url||!key) return null;
+  try{
+    const r = await fetch(url+"/rest/v1/trainlog?order=date.desc&limit=500&type=neq.config",
+      {headers:{"apikey":key,"Authorization":"Bearer "+key}});
+    const d = await r.json();
+    if(!Array.isArray(d)) return null;
+    return d.map(row=>{
+      let p={};
+      try{p=JSON.parse(row.data||"{}");}catch{}
+      return {
+        id:row.id, date:row.date, type:row.type, label:row.label,
+        duration:row.duration, distance:row.distance, notes:row.notes,
+        preEnergy:row.pre_energy, prePain:row.pre_pain, preNote:row.pre_note,
+        postEnergy:row.post_energy, postNote:row.post_note,
+        sessionKey:p.sessionKey, blocks:p.blocks,
+        dist:p.dist, fc:p.fc, fcMax:p.fcMax,
+        swolf:p.swolf, kcal:p.kcal, feel:p.feel,
+        ciatico:p.ciatico, source:p.source,
+        sleepScore:p.sleepScore, hrRest:p.hrRest,
+        bodyBatMorning:p.bodyBatMorning, spo2:p.spo2,
+        hrv:p.hrv, sleepQuality:p.sleepQuality,
+      };
+    });
+  }catch{return null;}
+}
+
+// ── PARSERS GARMIN ────────────────────────────────────────────
+function parseGarminCSV(text){
+  const lines = text.trim().split("\n");
+  if(lines.length<2) return [];
+  const headers = lines[0].split(",").map(h=>h.trim().replace(/^\uFEFF/,""));
+  const idx={};headers.forEach((h,i)=>{idx[h]=i;});
+  const SWIM={"Natación":"swimming","Natación en piscina":"swimming","Piscina":"swimming","Open Water":"swimming"};
+  const results=[];
+  for(let i=1;i<lines.length;i++){
+    const line=lines[i].trim();if(!line)continue;
+    const cols=[];let cur="",inQ=false;
+    for(let c=0;c<line.length;c++){
+      const ch=line[c];
+      if(ch==='"'){inQ=!inQ;}
+      else if(ch===","&&!inQ){cols.push(cur.trim());cur="";}
+      else{cur+=ch;}
+    }
+    cols.push(cur.trim());
+    const g=name=>(cols[idx[name]]||"").replace(/"/g,"").trim();
+    const tipo=g("Tipo de actividad");
+    const fechaStr=g("Fecha");
+    const fecha=fechaStr.slice(0,10);
+    const titulo=g("Título")||tipo;
+    const cal=parseInt(g("Calorías").replace(/,/g,""))||null;
+    const dist=parseFloat(g("Distancia").replace(/,/g,""))||null;
+    const tiempoStr=g("Tiempo");
+    let durMin=null;
+    if(tiempoStr){const tp=tiempoStr.split(":").map(Number);if(tp.length>=2)durMin=Math.round(tp[0]*60+tp[1]+(tp[2]||0)/60);}
+    const fcMedia=parseInt(g("Frecuencia cardiaca media"))||null;
+    const fcMax2=parseInt(g("FC máxima"))||null;
+    const uid="garmin_"+fechaStr.replace(/[^0-9]/g,"");
+    const isSwim=!!SWIM[tipo];
+    const notes=[];
+    if(fcMedia)notes.push("FC media: "+fcMedia+" lpm");
+    if(fcMax2)notes.push("FC máx: "+fcMax2+" lpm");
+    if(cal)notes.push("Calorías: "+cal+" kcal");
+    if(dist&&isSwim)notes.push("Distancia: "+(dist*1000|0)+" m");
+    results.push({
+      id:uid,date:fecha,type:isSwim?"swimming":"activity",
+      label:titulo,duration:durMin,
+      distance:isSwim?Math.round(dist*1000):dist,
+      fc:fcMedia,fcMax:fcMax2,kcal:cal,
+      notes:notes.join(" · "),source:"garmin",
+    });
+  }
+  return results;
+}
+
+function parseGarminSleep(text){
+  const lines=text.trim().split("\n");
+  if(lines.length<2) return [];
+  const headers=lines[0].split(",").map(h=>h.trim().replace(/^\uFEFF/,"").replace(/"/g,""));
+  const idx={};headers.forEach((h,i)=>{idx[h]=i;});
+  const results=[];
+  for(let i=1;i<lines.length;i++){
+    const line=lines[i].trim();if(!line)continue;
+    const cols=line.split(",").map(c=>c.trim().replace(/"/g,""));
+    const g=name=>{const i2=idx[name];return i2!=null?(cols[i2]||"").trim():"";};
+    const fecha=cols[0].trim().replace(/"/g,"");
+    if(!fecha||!fecha.match(/^\d{4}-\d{2}-\d{2}$/))continue;
+    const score=parseInt(g("Puntuación"))||null;
+    const hrRest=parseInt(g("Frecuencia cardiaca en reposo"))||null;
+    const bodyBat=parseInt(g("Body Battery"))||null;
+    const spo2=parseFloat(g("Pulsioximetría"))||null;
+    const hrv=parseInt(g("Estado de VFC"))||null;
+    const calidad=g("Calidad")||null;
+    const horaDormir=g("Hora de dormir")||null;
+    const horaDespertar=g("Hora de despertarte")||null;
+    const durStr=g("Duración")||"";
+    let durMin=null;
+    const mH=durStr.match(/(\d+)h/);const mM=durStr.match(/(\d+)min/);
+    if(mH||mM)durMin=(mH?parseInt(mH[1])*60:0)+(mM?parseInt(mM[1]):0);
+    const necesidad=g("Necesidad de sueño")||null;
+    results.push({
+      id:"sleep_"+fecha,date:fecha,type:"sleep",label:"Sueño",
+      duration:durMin,sleepScore:score,hrRest,bodyBatMorning:bodyBat,
+      spo2,hrv,sleepQuality:calidad,bedTime:horaDormir,wakeTime:horaDespertar,
+      sleepNeed:necesidad,
+      notes:[calidad&&"Calidad: "+calidad,score&&"Score: "+score,
+             durMin&&Math.floor(durMin/60)+"h"+(durMin%60)+"m",
+             hrRest&&"FC reposo: "+hrRest,bodyBat&&"BB: "+bodyBat].filter(Boolean).join(" · "),
+      source:"garmin_sleep",
+    });
+  }
+  return results;
+}
+
+// ── UTILS ────────────────────────────────────────────────────
+function today(){
+  const d=new Date();
+  const local=new Date(d.getTime()-180*60000);
+  return local.toISOString().slice(0,10);
+}
+function fmtDate(iso){
+  return new Date(iso+"T12:00:00").toLocaleDateString("es-AR",{weekday:"short",day:"2-digit",month:"short"});
+}
+function fmtDateLong(iso){
+  const d=new Date(iso+"T12:00:00");
+  const dias=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+  const meses=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  return dias[d.getDay()]+" "+d.getDate()+" de "+meses[d.getMonth()];
+}
+function pad2(n){return String(n).padStart(2,"0");}
+function isoDay(y,m,d){return y+"-"+pad2(m+1)+"-"+pad2(d);}
+
+// ── SESIONES PILETA ───────────────────────────────────────────
+const SESSIONS = {
+  A:{key:"A",name:"Sesión A",desc:"Fondo suave",dist:1300,dur:45,phase:1,color:C.pool,bg:C.poolBg,
+     detail:"200m crol suave · 4×50m tabla · 4×50m pull buoy · 400m crol continuo · 200m espalda · 2×50m lento"},
+  B:{key:"B",name:"Sesión B",desc:"Técnica + accesorios",dist:1300,dur:50,phase:1,color:C.pool,bg:C.poolBg,
+     detail:"200m crol · 4×50m aletas · 4×50m manoplas+pullbuoy · 4×100m crol/espalda · 200m espalda · 100m tabla"},
+  C:{key:"C",name:"Sesión C",desc:"Resistencia base",dist:1600,dur:55,phase:1,color:C.pool,bg:C.poolBg,
+     detail:"4×50m alternado · 6×25m sprint tabla · 300m pull buoy · 6×100m crol · 4×50m braza* · 200m espalda"},
+  D:{key:"D",name:"Sesión D",desc:"Recuperación activa",dist:1200,dur:40,phase:1,color:"#546e7a",bg:"#eceff1",
+     detail:"400m crol muy lento · 400m pull buoy · 400m espalda suave"},
+  E:{key:"E",name:"Sesión E",desc:"Fondo continuo",dist:2000,dur:60,phase:2,color:"#1b5e20",bg:"#e8f5e9",
+     detail:"400m crol · 4×100m pull buoy+manoplas · 600m crol 2:10-2:20/100m · 2×100m pull buoy · 4×50m sprint tabla · 200m espalda"},
+  F:{key:"F",name:"Sesión F",desc:"Series con tiempo",dist:2200,dur:65,phase:2,color:"#1b5e20",bg:"#e8f5e9",
+     detail:"4×50m alternado · 8×100m crol (obj 2:05-2:10) · 400m pull buoy · 4×100m crol adicional · 6×25m sprint · 50m patada tabla · 200m espalda"},
+  G:{key:"G",name:"Sesión G",desc:"Técnica + resistencia",dist:2000,dur:60,phase:2,color:"#1b5e20",bg:"#e8f5e9",
+     detail:"4×50m aletas · 4×100m manoplas · 6×100m mixto · 400m pull buoy fondo · 4×50m espalda tabla · 200m suave"},
+  H:{key:"H",name:"Sesión H",desc:"Umbral aeróbico",dist:2800,dur:75,phase:3,color:C.purple,bg:C.purpleBg,
+     detail:"400m crol · pirámide 100+200+300+200+100m (900m) · 4×100m crol fondo · 8×25m sprint · 400m pull buoy · 4×75m técnica espalda · 200m suave"},
+  libre:{key:"libre",name:"Nado libre",desc:"Sin estructura",dist:null,dur:null,phase:0,color:"#546e7a",bg:"#eceff1",
+         detail:"Nado libre — cargar distancia y tiempo manualmente"},
+};
+
+// ── BLOQUES SECO ──────────────────────────────────────────────
+const BLOCKS = {
+  S4:{key:"S4",name:"Articular columna",dur:5,icon:"🔄",desc:"Calentamiento — SIEMPRE primero",color:C.purple,bg:C.purpleBg},
+  S1:{key:"S1",name:"Core Pilates base",dur:25,icon:"🧘",desc:"Dead Bug · Bird-Dog · Puente · Plancha",color:C.dry,bg:C.dryBg},
+  S2:{key:"S2",name:"Fortalecer espalda",dur:15,icon:"🏋️",desc:"Gato-Vaca · Roll up · El Cien · Cobra",color:C.dry,bg:C.dryBg},
+  S3:{key:"S3",name:"Los Fabulosos 5",dur:10,icon:"⭐",desc:"5 ejercicios abdominales Pilates",color:C.dry,bg:C.dryBg},
+  S5:{key:"S5",name:"Estiramientos",dur:14,icon:"🤸",desc:"Cierre de cualquier sesión",color:"#0277bd",bg:"#e1f5fe"},
+  S6:{key:"S6",name:"Pilates avanzado",dur:30,icon:"🎯",desc:"The Hundred · Roll Up · Scissors",color:C.purple,bg:C.purpleBg},
+  S7:{key:"S7",name:"Brazada y hombros",dur:20,icon:"💪",desc:"Bandas tubulares · Simulación crol",color:C.dry,bg:C.dryBg},
+  S8:{key:"S8",name:"Tren inferior",dur:20,icon:"🦵",desc:"Bandas tubulares · Glúteo · Cadera",color:C.dry,bg:C.dryBg},
+  S9:{key:"S9",name:"Tabata triple",dur:13,icon:"⚡",desc:"Sentadillas · Abdominales · Flexiones",color:C.orange,bg:C.orangeBg},
+  S10:{key:"S10",name:"Tabata avanzado",dur:16,icon:"🔥",desc:"Dominadas · Flexiones · Abdominales · Sentadillas",color:C.red,bg:C.redBg},
+  S11:{key:"S11",name:"AMRAP 10 min",dur:10,icon:"⏱️",desc:"Flexiones · Burpee · Sentadillas · Tijeras · Escalador",color:C.orange,bg:C.orangeBg},
+};
+
+const COMBOS = [
+  {id:"mie-corto",label:"Miércoles corto",blocks:["S4","S2"],dur:20,desc:"Post-natación · 20 min"},
+  {id:"vie-corto",label:"Viernes corto",blocks:["S4","S1","S7"],dur:50,desc:"50 min"},
+  {id:"vie-largo",label:"Viernes largo",blocks:["S4","S3","S1","S7","S8","S5"],dur:95,desc:"~95 min completo"},
+  {id:"dom-stretch",label:"Domingo stretching",blocks:["S5"],dur:14,desc:"Solo estiramientos"},
+  {id:"hiit",label:"Sábado HIIT",blocks:["S4","S1","S9"],dur:48,desc:"Body Battery > 75"},
+];
+
+// ── ESTILOS ───────────────────────────────────────────────────
+const st = {
+  card:{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"},
+  inp:{background:"#f5f6f8",border:"1px solid "+C.border,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:14,width:"100%",outline:"none"},
+  btn:{background:C.pool,color:"#fff",border:"none",borderRadius:12,padding:"14px",fontSize:14,fontWeight:"600",cursor:"pointer",display:"block",width:"100%",textAlign:"center"},
+  ghost:{background:"transparent",color:C.pool,border:"1px solid "+C.pool+"55",borderRadius:9,padding:"9px 14px",fontSize:12,cursor:"pointer",fontWeight:"600"},
+  lbl:{color:C.muted,fontSize:10,textTransform:"uppercase",letterSpacing:1.5,marginBottom:6,display:"block",fontWeight:"700"},
+  tag:{display:"inline-block",padding:"3px 9px",borderRadius:20,fontSize:10,fontWeight:"700",letterSpacing:0.5},
+};
+
+// ── NAV ──────────────────────────────────────────────────────
+const TABS = [
+  {id:"home",icon:"🏠",label:"Inicio"},
+  {id:"swim",icon:"🏊",label:"Nadar"},
+  {id:"dry",icon:"💪",label:"Seco"},
+  {id:"nutri",icon:"🥗",label:"Nutrición"},
+  {id:"progress",icon:"📊",label:"Progreso"},
+  {id:"settings",icon:"⚙️",label:"Config"},
+];
+function Nav({tab,set}){
+  return <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"min(480px,100%)",background:"#fff",borderTop:"1px solid "+C.border,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom)"}}>
+    {TABS.map(n=>{
+      const active=tab===n.id;
+      return <button key={n.id} onClick={()=>set(n.id)} style={{flex:1,background:"none",border:"none",padding:"10px 2px 11px",cursor:"pointer",color:active?C.pool:C.muted,fontSize:9,display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontWeight:"700",borderTop:active?"2px solid "+C.pool:"2px solid transparent",transition:"all 0.15s"}}>
+        <span style={{fontSize:18}}>{n.icon}</span>
+        <span>{n.label}</span>
+      </button>;
+    })}
+  </div>;
+}
+
+// ── HEADER ────────────────────────────────────────────────────
+function Header({title,sub}){
+  return <div style={{padding:"18px 16px 12px",borderBottom:"1px solid "+C.border,background:"#fff",position:"sticky",top:0,zIndex:50}}>
+    <div style={{color:C.pool,fontSize:22,fontWeight:"800",letterSpacing:2}}>TRAINLOG</div>
+    <div style={{color:C.muted,fontSize:10,letterSpacing:2,fontWeight:"700",marginTop:2}}>{title||""}{sub?<span style={{color:C.muted2}}> · {sub}</span>:null}</div>
+  </div>;
+}
+
+// ── INICIO ────────────────────────────────────────────────────
+function Home({logs,setTab}){
+  const swimLogs = logs.filter(l=>l.type==="swimming");
+  const dryLogs = logs.filter(l=>l.type==="home");
+  const sleepToday = logs.find(l=>l.type==="sleep"&&l.date===today());
+  const swimThisWeek = swimLogs.filter(l=>{
+    const d=new Date(l.date+"T12:00:00");
+    const now=new Date();
+    return (now-d)/86400000<=7;
+  });
+  const totalDistWeek = swimThisWeek.reduce((s,l)=>s+(l.dist||l.distance||0),0);
+  const lastSwim = swimLogs[0];
+  const lastSleep = logs.filter(l=>l.type==="sleep").sort((a,b)=>b.date.localeCompare(a.date))[0];
+
+  // Próxima sesión sugerida
+  const lastSessionKey = lastSwim?.sessionKey;
+  const order=["A","B","C","D"];
+  let nextSess = "A";
+  if(lastSessionKey&&order.includes(lastSessionKey)){
+    const idx=order.indexOf(lastSessionKey);
+    nextSess=order[(idx+1)%order.length];
+  }
+  const ns = SESSIONS[nextSess];
+
+  const FEEL_ICONS={great:"💪",good:"😊",ok:"😐",tired:"😓",bad:"🤒"};
+
+  return <div>
+    {/* BB y estado */}
+    {lastSleep&&<div style={{...st.card,background:C.poolBg,borderColor:C.pool+"33"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:10,color:C.pool,fontWeight:"700",letterSpacing:1,marginBottom:4}}>ANOCHE · {fmtDate(lastSleep.date)}</div>
+          <div style={{display:"flex",gap:12,alignItems:"center"}}>
+            {lastSleep.sleepScore&&<div><span style={{fontSize:22,fontWeight:"800",color:C.pool}}>{lastSleep.sleepScore}</span><span style={{fontSize:10,color:C.muted}}> pts</span></div>}
+            {lastSleep.duration&&<div><span style={{fontSize:22,fontWeight:"800",color:C.pool}}>{Math.floor(lastSleep.duration/60)}h{lastSleep.duration%60}m</span></div>}
+            {lastSleep.bodyBatMorning&&<div><span style={{fontSize:22,fontWeight:"800",color:C.pool}}>{lastSleep.bodyBatMorning}</span><span style={{fontSize:10,color:C.muted}}> BB</span></div>}
+          </div>
+          {lastSleep.sleepQuality&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{lastSleep.sleepQuality}</div>}
+        </div>
+        <div style={{fontSize:36}}>😴</div>
+      </div>
+    </div>}
+
+    {/* Próxima sesión */}
+    {ns&&<div style={{...st.card,background:ns.bg,borderColor:ns.color+"33",cursor:"pointer"}} onClick={()=>setTab("swim")}>
+      <div style={{fontSize:10,color:ns.color,fontWeight:"700",letterSpacing:1,marginBottom:8}}>PRÓXIMA SESIÓN SUGERIDA</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:"800",color:ns.color}}>{ns.name} <span style={{fontSize:13,fontWeight:"600",color:C.muted}}>· {ns.desc}</span></div>
+          <div style={{fontSize:12,color:C.muted,marginTop:4}}>{ns.dist}m · {ns.dur} min · Fase {ns.phase}</div>
+        </div>
+        <div style={{background:ns.color,borderRadius:12,padding:"10px 16px",color:"#fff",fontWeight:"700",fontSize:13}}>IR →</div>
+      </div>
+    </div>}
+
+    {/* Stats semana */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+      {[
+        {v:swimThisWeek.length,u:"pileta",icon:"🏊",c:C.pool},
+        {v:totalDistWeek?(totalDistWeek/1000).toFixed(1)+"km":"0m",u:"esta semana",icon:"📏",c:C.green},
+        {v:dryLogs.filter(l=>{const d=new Date(l.date+"T12:00:00");return(new Date()-d)/86400000<=7;}).length,u:"seco",icon:"💪",c:C.dry},
+      ].map((x,i)=><div key={i} style={{...st.card,textAlign:"center",padding:"14px 8px",marginBottom:0}}>
+        <div style={{fontSize:24}}>{x.icon}</div>
+        <div style={{color:x.c,fontSize:20,fontWeight:"800",lineHeight:1.2,marginTop:4}}>{x.v}</div>
+        <div style={{color:C.muted,fontSize:9,fontWeight:"700",marginTop:2}}>{x.u}</div>
+      </div>)}
+    </div>
+
+    {/* Actividad reciente */}
+    {logs.filter(l=>l.type!=="sleep").slice(0,5).length>0&&<div style={st.card}>
+      <div style={{fontSize:10,color:C.muted,letterSpacing:1.5,fontWeight:"700",marginBottom:12}}>ACTIVIDAD RECIENTE</div>
+      {logs.filter(l=>l.type!=="sleep").slice(0,5).map((l,i,arr)=>{
+        const isSwim=l.type==="swimming";
+        const isDry=l.type==="home";
+        const col=isSwim?C.pool:isDry?C.dry:C.muted;
+        const bg=isSwim?C.poolBg:isDry?C.dryBg:"#f5f5f5";
+        return <div key={l.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:i<arr.length-1?"1px solid "+C.border:"none"}}>
+          <div style={{width:38,height:38,borderRadius:10,background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+            {isSwim?"🏊":isDry?"💪":"⚡"}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:"600"}}>{l.label}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+              {fmtDate(l.date)}
+              {l.dist||l.distance?" · "+(l.dist||l.distance)+"m":""}
+              {l.duration?" · "+l.duration+"min":""}
+              {l.feel?<span style={{marginLeft:8}}>{FEEL_ICONS[l.feel]||""}</span>:""}
+            </div>
+          </div>
+          {l.swolf&&<div style={{textAlign:"right"}}>
+            <div style={{fontSize:11,color:C.muted}}>SWOLF</div>
+            <div style={{fontSize:16,fontWeight:"800",color:col}}>{l.swolf}</div>
+          </div>}
+        </div>;
+      })}
+    </div>}
+  </div>;
+}
+
+// ── REGISTRAR NATACIÓN ────────────────────────────────────────
+function SwimLog({logs,addLog}){
+  const [step,setStep] = useState("select"); // select | detail | done
+  const [sessKey,setSessKey] = useState(null);
+  const [date,setDate] = useState(today());
+  const [dist,setDist] = useState("");
+  const [dur,setDur] = useState("");
+  const [fc,setFc] = useState("");
+  const [fcMax,setFcMax] = useState("");
+  const [swolf,setSwolf] = useState("");
+  const [kcal,setKcal] = useState("");
+  const [feel,setFeel] = useState("good");
+  const [ciatico,setCiatico] = useState(0);
+  const [notes,setNotes] = useState("");
+  const [showDetail,setShowDetail] = useState(false);
+
+  const sess = sessKey?SESSIONS[sessKey]:null;
+
+  function reset(){setStep("select");setSessKey(null);setDist("");setDur("");setFc("");setFcMax("");setSwolf("");setKcal("");setFeel("good");setCiatico(0);setNotes("");setDate(today());setShowDetail(false);}
+
+  function save(){
+    const log={
+      id:Date.now().toString(),
+      date,type:"swimming",
+      label:sess?sess.name+" · "+sess.desc:"Natación libre",
+      sessionKey:sessKey,
+      dist:parseInt(dist)||sess?.dist||null,
+      distance:parseInt(dist)||sess?.dist||null,
+      duration:parseInt(dur)||sess?.dur||null,
+      fc:parseInt(fc)||null,
+      fcMax:parseInt(fcMax)||null,
+      swolf:parseInt(swolf)||null,
+      kcal:parseInt(kcal)||null,
+      feel,ciatico,notes,
+    };
+    addLog(log);
+    setStep("done");
+    setTimeout(reset,2500);
+  }
+
+  if(step==="done") return <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 20px",textAlign:"center"}}>
+    <div style={{fontSize:60,marginBottom:16}}>✅</div>
+    <div style={{fontSize:22,fontWeight:"800",color:C.pool}}>¡Guardado!</div>
+    {sess&&<div style={{color:C.muted,marginTop:8}}>{sess.name} · {dist||sess.dist}m</div>}
+  </div>;
+
+  if(step==="select") return <div>
+    <div style={{fontSize:10,color:C.muted,letterSpacing:1.5,fontWeight:"700",marginBottom:16}}>ELEGÍ LA SESIÓN DE HOY</div>
+
+    {/* Fase 1 */}
+    <div style={{fontSize:10,color:C.pool,fontWeight:"700",letterSpacing:1,marginBottom:8}}>FASE 1 — Semanas 1-4</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+      {["A","B","C","D"].map(k=>{
+        const s=SESSIONS[k];
+        return <button key={k} onClick={()=>{setSessKey(k);setDist(s.dist||"");setDur(s.dur||"");setStep("detail");}} style={{background:s.bg,border:"2px solid "+s.color+"44",borderRadius:12,padding:"14px 12px",cursor:"pointer",textAlign:"left"}}>
+          <div style={{fontSize:22,fontWeight:"900",color:s.color,lineHeight:1}}>{k}</div>
+          <div style={{fontSize:13,fontWeight:"700",color:s.color,marginTop:4}}>{s.desc}</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:2}}>{s.dist}m · {s.dur}min</div>
+        </button>;
+      })}
+    </div>
+
+    {/* Fase 2 */}
+    <div style={{fontSize:10,color:C.green,fontWeight:"700",letterSpacing:1,marginBottom:8}}>FASE 2 — Desde 20/4</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+      {["E","F","G"].map(k=>{
+        const s=SESSIONS[k];
+        return <button key={k} onClick={()=>{setSessKey(k);setDist(s.dist||"");setDur(s.dur||"");setStep("detail");}} style={{background:s.bg,border:"2px solid "+s.color+"44",borderRadius:12,padding:"12px 10px",cursor:"pointer",textAlign:"left"}}>
+          <div style={{fontSize:20,fontWeight:"900",color:s.color,lineHeight:1}}>{k}</div>
+          <div style={{fontSize:11,fontWeight:"700",color:s.color,marginTop:3}}>{s.desc}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:1}}>{s.dist}m</div>
+        </button>;
+      })}
+    </div>
+
+    {/* Fase 3 */}
+    <div style={{fontSize:10,color:C.purple,fontWeight:"700",letterSpacing:1,marginBottom:8}}>FASE 3 — Desde 25/5</div>
+    <button onClick={()=>{setSessKey("H");setDist(SESSIONS.H.dist);setDur(SESSIONS.H.dur);setStep("detail");}} style={{...st.card,background:C.purpleBg,borderColor:C.purple+"44",width:"100%",textAlign:"left",cursor:"pointer",marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:"900",color:C.purple}}>H — Umbral aeróbico</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}>2800m · 75 min · Pirámide + sprints</div>
+        </div>
+        <span style={{fontSize:18,color:C.purple}}>›</span>
+      </div>
+    </button>
+
+    {/* Libre */}
+    <button onClick={()=>{setSessKey("libre");setStep("detail");}} style={{...st.card,width:"100%",textAlign:"left",cursor:"pointer",background:"#f5f5f5",borderColor:C.border}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:"700",color:C.muted}}>Nado libre / Con profesor</div>
+          <div style={{fontSize:12,color:C.muted2,marginTop:2}}>Cargar métricas manualmente</div>
+        </div>
+        <span style={{fontSize:18,color:C.muted}}>›</span>
+      </div>
+    </button>
+  </div>;
+
+  // Step: detail
+  return <div>
+    <button onClick={()=>{setStep("select");setSessKey(null);}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:13,fontWeight:"600",padding:0,marginBottom:16}}>← Cambiar sesión</button>
+
+    {sess&&<div style={{background:sess.bg,borderLeft:"4px solid "+sess.color,borderRadius:"0 10px 10px 0",padding:"12px 14px",marginBottom:20}}>
+      <div style={{fontSize:17,fontWeight:"800",color:sess.color}}>{sess.name} · {sess.desc}</div>
+      <div style={{fontSize:11,color:C.muted,marginTop:4}}>{sess.detail}</div>
+      {sess.key==="C"&&<div style={{fontSize:10,color:C.orange,marginTop:4,fontWeight:"700"}}>* Braza: cambiar por espalda si duele el ciático</div>}
+    </div>}
+
+    {/* Fecha */}
+    <div style={{marginBottom:14}}>
+      <label style={st.lbl}>FECHA</label>
+      <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={st.inp}/>
+    </div>
+
+    {/* Métricas principales */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+      <div>
+        <label style={st.lbl}>DISTANCIA (m)</label>
+        <input type="number" value={dist} onChange={e=>setDist(e.target.value)} style={st.inp} placeholder={sess?.dist||"1400"}/>
+      </div>
+      <div>
+        <label style={st.lbl}>DURACIÓN (min)</label>
+        <input type="number" value={dur} onChange={e=>setDur(e.target.value)} style={st.inp} placeholder={sess?.dur||"45"}/>
+      </div>
+    </div>
+
+    {/* Métricas opcionales */}
+    <button onClick={()=>setShowDetail(!showDetail)} style={{background:"none",border:"none",color:C.pool,fontSize:12,fontWeight:"700",cursor:"pointer",padding:"0 0 14px",display:"flex",alignItems:"center",gap:6}}>
+      {showDetail?"▲":"▼"} Métricas del Garmin (opcional)
+    </button>
+
+    {showDetail&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+      <div>
+        <label style={st.lbl}>FC MEDIA (lpm)</label>
+        <input type="number" value={fc} onChange={e=>setFc(e.target.value)} style={st.inp} placeholder="130"/>
+      </div>
+      <div>
+        <label style={st.lbl}>FC MÁX (lpm)</label>
+        <input type="number" value={fcMax} onChange={e=>setFcMax(e.target.value)} style={st.inp} placeholder="165"/>
+      </div>
+      <div>
+        <label style={st.lbl}>SWOLF</label>
+        <input type="number" value={swolf} onChange={e=>setSwolf(e.target.value)} style={st.inp} placeholder="50"/>
+      </div>
+      <div>
+        <label style={st.lbl}>CALORÍAS</label>
+        <input type="number" value={kcal} onChange={e=>setKcal(e.target.value)} style={st.inp} placeholder="388"/>
+      </div>
+    </div>}
+
+    {/* Cómo me sentí */}
+    <div style={{marginBottom:14}}>
+      <label style={st.lbl}>¿CÓMO ME SENTÍ?</label>
+      <div style={{display:"flex",gap:8}}>
+        {[["great","💪","Excelente"],["good","😊","Bien"],["ok","😐","Regular"],["tired","😓","Cansado"],["bad","🤒","Mal"]].map(([v,em,lb])=>
+          <button key={v} onClick={()=>setFeel(v)} style={{flex:1,background:feel===v?C.poolBg:C.card,border:"1px solid "+(feel===v?C.pool:C.border),borderRadius:10,padding:"8px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <span style={{fontSize:20}}>{em}</span>
+            <span style={{fontSize:8,color:feel===v?C.pool:C.muted,fontWeight:"700"}}>{lb}</span>
+          </button>
+        )}
+      </div>
+    </div>
+
+    {/* Ciático */}
+    <div style={{marginBottom:14}}>
+      <label style={st.lbl}>CIÁTICO (0 = sin dolor)</label>
+      <div style={{display:"flex",gap:6}}>
+        {[0,1,2,3,4,5].map(v=><button key={v} onClick={()=>setCiatico(v)} style={{flex:1,background:ciatico===v?v===0?C.greenBg:v<=2?C.orangeBg:C.redBg:"#f5f5f5",border:"1px solid "+(ciatico===v?v===0?C.green:v<=2?C.orange:C.red:C.border),borderRadius:8,padding:"10px 4px",cursor:"pointer",fontSize:14,fontWeight:"700",color:ciatico===v?v===0?C.green:v<=2?C.orange:C.red:C.muted}}>{v}</button>)}
+      </div>
+      {ciatico>=3&&<div style={{color:C.red,fontSize:11,marginTop:6,fontWeight:"600"}}>⚠ Con dolor ≥3 considerá sesión suave o descanso</div>}
+    </div>
+
+    {/* Notas */}
+    <div style={{marginBottom:20}}>
+      <label style={st.lbl}>NOTAS (opcional)</label>
+      <textarea value={notes} onChange={e=>setNotes(e.target.value)} style={{...st.inp,height:70,resize:"none"}} placeholder="Observaciones, sensaciones, qué estuvo bien o mal..."/>
+    </div>
+
+    <button onClick={save} style={st.btn}>GUARDAR SESIÓN ✓</button>
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── REGISTRAR SECO ────────────────────────────────────────────
+function DryLog({logs,addLog}){
+  const [step,setStep] = useState("select"); // select | detail | done
+  const [selectedBlocks,setSelectedBlocks] = useState([]);
+  const [date,setDate] = useState(today());
+  const [feel,setFeel] = useState("good");
+  const [ciatico,setCiatico] = useState(0);
+  const [notes,setNotes] = useState("");
+  const [useCombo,setUseCombo] = useState(true);
+
+  function toggleBlock(key){
+    setSelectedBlocks(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);
+  }
+  function selectCombo(c){
+    setSelectedBlocks(c.blocks);
+    setStep("detail");
+  }
+  function reset(){setStep("select");setSelectedBlocks([]);setFeel("good");setCiatico(0);setNotes("");setDate(today());}
+  function save(){
+    const totalDur = selectedBlocks.reduce((s,k)=>s+(BLOCKS[k]?.dur||0),0);
+    const label = selectedBlocks.map(k=>BLOCKS[k]?.name||k).join(" + ");
+    addLog({
+      id:Date.now().toString(),
+      date,type:"home",
+      label,blocks:selectedBlocks,
+      duration:totalDur,
+      feel,ciatico,notes,
+    });
+    setStep("done");
+    setTimeout(reset,2500);
+  }
+
+  if(step==="done") return <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 20px",textAlign:"center"}}>
+    <div style={{fontSize:60,marginBottom:16}}>✅</div>
+    <div style={{fontSize:22,fontWeight:"800",color:C.dry}}>¡Guardado!</div>
+    <div style={{color:C.muted,marginTop:8}}>{selectedBlocks.map(k=>BLOCKS[k]?.name||k).join(" + ")}</div>
+  </div>;
+
+  if(step==="select") return <div>
+    {/* Combos rápidos */}
+    <div style={{fontSize:10,color:C.muted,letterSpacing:1.5,fontWeight:"700",marginBottom:12}}>COMBINACIONES RÁPIDAS</div>
+    {COMBOS.map(c=><button key={c.id} onClick={()=>selectCombo(c)} style={{...st.card,width:"100%",textAlign:"left",cursor:"pointer",display:"block",borderLeft:"4px solid "+C.dry}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:14,fontWeight:"700",color:C.dry}}>{c.label}</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:3}}>{c.desc} · {c.blocks.map(k=>k).join(" + ")}</div>
+        </div>
+        <span style={{color:C.dry,fontSize:16}}>›</span>
+      </div>
+    </button>)}
+
+    {/* Manual */}
+    <div style={{borderTop:"1px solid "+C.border,paddingTop:14,marginTop:4}}>
+      <div style={{fontSize:10,color:C.muted,letterSpacing:1.5,fontWeight:"700",marginBottom:12}}>O ELEGÍ BLOQUES MANUALMENTE</div>
+      {Object.values(BLOCKS).map(b=>{
+        const sel=selectedBlocks.includes(b.key);
+        return <button key={b.key} onClick={()=>toggleBlock(b.key)} style={{...st.card,width:"100%",textAlign:"left",cursor:"pointer",display:"block",background:sel?b.bg:C.card,borderColor:sel?b.color+"66":C.border,borderWidth:sel?2:1,marginBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:24}}>{b.icon}</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:"700",color:sel?b.color:C.text}}>{b.key} — {b.name}</div>
+              <div style={{fontSize:11,color:C.muted,marginTop:2}}>{b.desc} · {b.dur} min</div>
+            </div>
+            <div style={{width:24,height:24,borderRadius:"50%",border:"2px solid "+(sel?b.color:C.border),background:sel?b.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:14,flexShrink:0}}>{sel?"✓":""}</div>
+          </div>
+        </button>;
+      })}
+      {selectedBlocks.length>0&&<button onClick={()=>setStep("detail")} style={{...st.btn,background:C.dry,marginTop:8}}>
+        CONTINUAR CON {selectedBlocks.length} BLOQUE{selectedBlocks.length>1?"S":""} →
+      </button>}
+    </div>
+    <div style={{height:20}}/>
+  </div>;
+
+  // Detail
+  const totalDur = selectedBlocks.reduce((s,k)=>s+(BLOCKS[k]?.dur||0),0);
+  return <div>
+    <button onClick={()=>setStep("select")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:13,fontWeight:"600",padding:0,marginBottom:16}}>← Cambiar bloques</button>
+
+    <div style={{...st.card,background:C.dryBg,borderColor:C.dry+"44",marginBottom:20}}>
+      <div style={{fontSize:10,color:C.dry,fontWeight:"700",letterSpacing:1,marginBottom:8}}>BLOQUES SELECCIONADOS · {totalDur} min</div>
+      {selectedBlocks.map(k=>{
+        const b=BLOCKS[k];
+        return b?<div key={k} style={{display:"flex",gap:10,padding:"6px 0",borderBottom:"1px solid "+C.dry+"22",alignItems:"center"}}>
+          <span style={{fontSize:18}}>{b.icon}</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:"600",color:C.dry}}>{b.key} — {b.name}</div>
+            <div style={{fontSize:11,color:C.muted}}>{b.desc} · {b.dur} min</div>
+          </div>
+        </div>:null;
+      })}
+    </div>
+
+    <div style={{marginBottom:14}}>
+      <label style={st.lbl}>FECHA</label>
+      <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={st.inp}/>
+    </div>
+
+    <div style={{marginBottom:14}}>
+      <label style={st.lbl}>¿CÓMO ME SENTÍ?</label>
+      <div style={{display:"flex",gap:8}}>
+        {[["great","💪","Excelente"],["good","😊","Bien"],["ok","😐","Regular"],["tired","😓","Cansado"],["bad","🤒","Mal"]].map(([v,em,lb])=>
+          <button key={v} onClick={()=>setFeel(v)} style={{flex:1,background:feel===v?C.dryBg:C.card,border:"1px solid "+(feel===v?C.dry:C.border),borderRadius:10,padding:"8px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <span style={{fontSize:20}}>{em}</span>
+            <span style={{fontSize:8,color:feel===v?C.dry:C.muted,fontWeight:"700"}}>{lb}</span>
+          </button>
+        )}
+      </div>
+    </div>
+
+    <div style={{marginBottom:14}}>
+      <label style={st.lbl}>CIÁTICO (0 = sin dolor)</label>
+      <div style={{display:"flex",gap:6}}>
+        {[0,1,2,3,4,5].map(v=><button key={v} onClick={()=>setCiatico(v)} style={{flex:1,background:ciatico===v?v===0?C.greenBg:v<=2?C.orangeBg:C.redBg:"#f5f5f5",border:"1px solid "+(ciatico===v?v===0?C.green:v<=2?C.orange:C.red:C.border),borderRadius:8,padding:"10px 4px",cursor:"pointer",fontSize:14,fontWeight:"700",color:ciatico===v?v===0?C.green:v<=2?C.orange:C.red:C.muted}}>{v}</button>)}
+      </div>
+    </div>
+
+    <div style={{marginBottom:20}}>
+      <label style={st.lbl}>NOTAS</label>
+      <textarea value={notes} onChange={e=>setNotes(e.target.value)} style={{...st.inp,height:60,resize:"none"}} placeholder="Observaciones..."/>
+    </div>
+
+    <button onClick={save} style={{...st.btn,background:C.dry}}>GUARDAR SECO ✓</button>
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── PROGRESO ─────────────────────────────────────────────────
+function Progress({logs,addLog,sbUrl,sbKey}){
+  const [pesoInput,setPesoInput] = useState("");
+  const [pesoDate,setPesoDate] = useState(today());
+  const [pesoSaved,setPesoSaved] = useState(false);
+  const [importResult,setImportResult] = useState(null);
+  const [importLoading,setImportLoading] = useState(false);
+  const [importType,setImportType] = useState(null);
+  const fileRef = useRef(null);
+
+  const pesoLogs = logs.filter(l=>l.type==="peso").sort((a,b)=>b.date.localeCompare(a.date));
+  const sleepLogs = logs.filter(l=>l.type==="sleep").sort((a,b)=>b.date.localeCompare(a.date));
+  const swimLogs = logs.filter(l=>l.type==="swimming").sort((a,b)=>b.date.localeCompare(a.date));
+
+  function savePeso(){
+    if(!pesoInput||isNaN(pesoInput)) return;
+    addLog({id:"peso_"+pesoDate,date:pesoDate,type:"peso",label:"Peso",distance:parseFloat(pesoInput),notes:pesoInput+" kg"});
+    setPesoSaved(true);setTimeout(()=>setPesoSaved(false),2000);setPesoInput("");
+  }
+
+  function handleFile(e){
+    const file=e.target.files&&e.target.files[0];
+    if(!file) return;
+    setImportLoading(true);setImportResult(null);
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const parsed = importType==="sleep"?parseGarminSleep(ev.target.result):parseGarminCSV(ev.target.result);
+        const existingIds=new Set(logs.map(l=>l.id));
+        const nuevas=parsed.filter(p=>!existingIds.has(p.id));
+        setImportResult({nuevas,duplicadas:parsed.length-nuevas.length,total:parsed.length,type:importType});
+        setImportLoading(false);
+      }catch(err){setImportResult({error:err.message});setImportLoading(false);}
+    };
+    reader.readAsText(file,"UTF-8");
+  }
+  function confirmarImport(){
+    if(!importResult?.nuevas) return;
+    importResult.nuevas.forEach(l=>addLog(l));
+    setImportResult({...importResult,done:true});
+    if(fileRef.current)fileRef.current.value="";
+  }
+
+  // Últimos 500m registrados
+  const last500 = swimLogs.find(l=>l.notes?.includes("500m")||l.sessionKey==="500m");
+
+  return <div>
+    {/* Peso */}
+    <div style={{...st.card,borderLeft:"4px solid "+C.green}}>
+      <div style={{fontSize:10,color:C.green,fontWeight:"700",letterSpacing:1,marginBottom:12}}>⚖️ REGISTRO DE PESO</div>
+      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"flex-end"}}>
+        <div style={{flex:1}}>
+          <label style={st.lbl}>PESO (kg)</label>
+          <input type="number" step="0.1" value={pesoInput} onChange={e=>setPesoInput(e.target.value)} style={st.inp} placeholder="78.4"/>
+        </div>
+        <div style={{flex:1}}>
+          <label style={st.lbl}>FECHA</label>
+          <input type="date" value={pesoDate} onChange={e=>setPesoDate(e.target.value)} style={st.inp}/>
+        </div>
+        <button onClick={savePeso} style={{background:pesoSaved?C.green:C.pool,color:"#fff",border:"none",borderRadius:10,padding:"11px 16px",cursor:"pointer",fontSize:13,fontWeight:"700",flexShrink:0,height:44}}>{pesoSaved?"✓":"+"}</button>
+      </div>
+
+      {/* Objetivo */}
+      <div style={{background:C.greenBg,borderRadius:10,padding:"10px 14px",marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:10,color:C.green,fontWeight:"700"}}>OBJETIVO JUNIO 2026</div>
+            <div style={{fontSize:18,fontWeight:"800",color:C.green}}>74-75 kg</div>
+          </div>
+          {pesoLogs[0]&&<div style={{textAlign:"right"}}>
+            <div style={{fontSize:10,color:C.muted}}>Actual</div>
+            <div style={{fontSize:22,fontWeight:"800",color:C.pool}}>{pesoLogs[0].distance} kg</div>
+            <div style={{fontSize:11,color:C.orange}}>faltan ~{Math.max(0,(pesoLogs[0].distance-74.5)).toFixed(1)} kg</div>
+          </div>}
+        </div>
+      </div>
+
+      {/* Historial peso */}
+      {pesoLogs.slice(0,8).map((p,i,arr)=>{
+        const prev=arr[i+1];
+        const diff=prev?(p.distance-prev.distance):null;
+        return <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<arr.length-1?"1px solid "+C.border:"none"}}>
+          <div style={{fontSize:12,color:C.muted}}>{fmtDate(p.date)}</div>
+          <div style={{display:"flex",gap:12,alignItems:"center"}}>
+            {diff!==null&&<div style={{fontSize:11,color:diff<0?C.green:C.red,fontWeight:"700"}}>{diff<0?"▼":"▲"} {Math.abs(diff).toFixed(1)} kg</div>}
+            <div style={{fontSize:18,fontWeight:"800",color:C.text}}>{p.distance} kg</div>
+          </div>
+        </div>;
+      })}
+    </div>
+
+    {/* Métricas pileta */}
+    {swimLogs.length>0&&<div style={st.card}>
+      <div style={{fontSize:10,color:C.pool,fontWeight:"700",letterSpacing:1,marginBottom:12}}>🏊 MÉTRICAS PILETA</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+        {[
+          {label:"Sesiones",v:swimLogs.length},
+          {label:"Dist. total",v:(swimLogs.reduce((s,l)=>s+(l.dist||l.distance||0),0)/1000).toFixed(1)+"km"},
+          {label:"SWOLF base",v:swimLogs.find(l=>l.swolf)?.swolf||"—"},
+        ].map((x,i)=><div key={i} style={{background:C.poolBg,borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
+          <div style={{fontSize:18,fontWeight:"800",color:C.pool}}>{x.v}</div>
+          <div style={{fontSize:9,color:C.muted,fontWeight:"700",marginTop:2}}>{x.label}</div>
+        </div>)}
+      </div>
+      {/* Últimas sesiones */}
+      {swimLogs.slice(0,5).map((l,i,arr)=><div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<arr.length-1?"1px solid "+C.border:"none"}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:"600"}}>{l.label||l.sessionKey}</div>
+          <div style={{fontSize:11,color:C.muted}}>{fmtDate(l.date)}</div>
+        </div>
+        <div style={{display:"flex",gap:12,fontSize:12}}>
+          {(l.dist||l.distance)&&<span style={{color:C.pool,fontWeight:"700"}}>{l.dist||l.distance}m</span>}
+          {l.swolf&&<span style={{color:C.orange,fontWeight:"700"}}>SW{l.swolf}</span>}
+          {l.fc&&<span style={{color:C.red}}>♥{l.fc}</span>}
+        </div>
+      </div>)}
+    </div>}
+
+    {/* Sueño */}
+    {sleepLogs.length>0&&<div style={st.card}>
+      <div style={{fontSize:10,color:C.purple,fontWeight:"700",letterSpacing:1,marginBottom:12}}>😴 SUEÑO RECIENTE</div>
+      {sleepLogs.slice(0,7).map((s,i,arr)=>{
+        const QUAL_COLORS={"Excelente":C.green,"Bueno":"#0277bd","Aceptable":C.orange,"Deficiente":C.red};
+        const qc=QUAL_COLORS[s.sleepQuality]||C.muted;
+        return <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<arr.length-1?"1px solid "+C.border:"none"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:"600"}}>{fmtDate(s.date)}</div>
+            {s.sleepQuality&&<div style={{fontSize:11,color:qc,fontWeight:"700"}}>{s.sleepQuality}</div>}
+          </div>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            {s.duration&&<span style={{fontSize:12,color:C.muted}}>{Math.floor(s.duration/60)}h{s.duration%60}m</span>}
+            {s.sleepScore&&<span style={{fontSize:18,fontWeight:"800",color:qc}}>{s.sleepScore}</span>}
+            {s.bodyBatMorning&&<span style={{fontSize:12,color:C.pool,fontWeight:"700"}}>BB{s.bodyBatMorning}</span>}
+          </div>
+        </div>;
+      })}
+    </div>}
+
+    {/* Importar Garmin */}
+    <div style={{...st.card,borderLeft:"4px solid "+C.pool}}>
+      <div style={{fontSize:10,color:C.pool,fontWeight:"700",letterSpacing:1,marginBottom:10}}>⌚ IMPORTAR CSV DEL GARMIN</div>
+      <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}} id="garmin-import"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+        <label htmlFor="garmin-import" onClick={()=>setImportType("activity")} style={{...st.btn,background:C.pool,display:"block",textAlign:"center",cursor:"pointer",fontSize:12,padding:"12px 8px"}}>📊 Actividades</label>
+        <label htmlFor="garmin-import" onClick={()=>setImportType("sleep")} style={{...st.btn,background:C.purple,display:"block",textAlign:"center",cursor:"pointer",fontSize:12,padding:"12px 8px"}}>😴 Sueño</label>
+      </div>
+      <div style={{fontSize:11,color:C.muted,lineHeight:1.7}}>
+        <strong>Actividades:</strong> connect.garmin.com → Actividades → Exportar CSV<br/>
+        <strong>Sueño:</strong> connect.garmin.com → Salud → Sueño → Exportar CSV
+      </div>
+      {importLoading&&<div style={{color:C.muted,fontSize:12,marginTop:10,textAlign:"center"}}>Leyendo archivo...</div>}
+      {importResult&&!importResult.error&&!importResult.done&&<div style={{marginTop:10}}>
+        <div style={{background:C.poolBg,borderRadius:10,padding:"10px 14px",marginBottom:10}}>
+          <div style={{fontSize:12}}>Total: <strong>{importResult.total}</strong> · Nuevas: <strong style={{color:C.green}}>{importResult.nuevas.length}</strong> · Ya existían: <strong style={{color:C.muted}}>{importResult.duplicadas}</strong></div>
+        </div>
+        {importResult.nuevas.length>0&&<button onClick={confirmarImport} style={{...st.btn}}>IMPORTAR {importResult.nuevas.length} {importResult.type==="sleep"?"NOCHES":"ACTIVIDADES"}</button>}
+      </div>}
+      {importResult?.done&&<div style={{color:C.green,fontWeight:"700",fontSize:13,marginTop:10,textAlign:"center"}}>✅ Importado correctamente</div>}
+      {importResult?.error&&<div style={{color:C.red,fontSize:12,marginTop:10}}>{importResult.error}</div>}
+    </div>
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── CONFIGURACIÓN ─────────────────────────────────────────────
+function Settings({sbUrl,setSbUrl,sbKey,setSbKey,logs}){
+  const [su,setSu] = useState(sbUrl);
+  const [sk,setSk] = useState(sbKey);
+  const [saved,setSaved] = useState(false);
+
+  function save(){setSbUrl(su);setSbKey(sk);ls.s("tl-sb-url",su);ls.s("tl-sb-key",sk);setSaved(true);setTimeout(()=>setSaved(false),2000);}
+
+  function exportCSV(){
+    const rows=[["Fecha","Tipo","Sesión","Distancia","Duración","FC","FC Máx","SWOLF","kcal","Cómo me sentí","Ciático","Notas"]];
+    logs.filter(l=>l.type!=="sleep"&&l.type!=="config").forEach(l=>rows.push([
+      l.date,l.type,l.label||"",l.dist||l.distance||"",l.duration||"",
+      l.fc||"",l.fcMax||"",l.swolf||"",l.kcal||"",l.feel||"",l.ciatico||0,l.notes||""
+    ]));
+    const c=rows.map(r=>r.map(v=>'"'+v+'"').join(",")).join("\n");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\uFEFF"+c],{type:"text/csv;charset=utf-8;"}));a.download="trainlog_"+today()+".csv";a.click();
+  }
+
+  return <div>
+    {/* Supabase */}
+    <div style={{...st.card,borderLeft:"4px solid "+C.pool}}>
+      <div style={{fontSize:10,color:C.pool,fontWeight:"700",letterSpacing:1,marginBottom:12}}>☁️ SUPABASE · SINCRONIZACIÓN</div>
+      <div style={{marginBottom:10}}>
+        <label style={st.lbl}>PROJECT URL</label>
+        <input value={su} onChange={e=>setSu(e.target.value)} style={st.inp} placeholder="https://xxxx.supabase.co"/>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={st.lbl}>ANON KEY</label>
+        <input type="password" value={sk} onChange={e=>setSk(e.target.value)} style={st.inp} placeholder="eyJhbGci..."/>
+      </div>
+      <button onClick={save} style={{...st.btn,background:saved?C.green:C.pool,marginBottom:10}}>{saved?"✓ GUARDADO":"GUARDAR"}</button>
+      {su&&sk&&<button onClick={()=>fetch(su+"/rest/v1/trainlog?select=count",{headers:{"apikey":sk,"Authorization":"Bearer "+sk,"Prefer":"count=exact"}}).then(r=>r.ok?alert("✅ Conexión OK"):alert("❌ Error "+r.status)).catch(e=>alert("❌ "+e.message))} style={{...st.ghost,width:"100%",textAlign:"center",fontSize:12}}>VERIFICAR CONEXIÓN</button>}
+    </div>
+
+    {/* Stats */}
+    <div style={st.card}>
+      <div style={{fontSize:10,color:C.muted,fontWeight:"700",letterSpacing:1,marginBottom:10}}>ESTADÍSTICAS</div>
+      {[
+        {l:"Total actividades",v:logs.filter(l=>l.type!=="sleep").length},
+        {l:"Sesiones de pileta",v:logs.filter(l=>l.type==="swimming").length},
+        {l:"Sesiones en seco",v:logs.filter(l=>l.type==="home").length},
+        {l:"Noches de sueño",v:logs.filter(l=>l.type==="sleep").length},
+      ].map((x,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid "+C.border,fontSize:13}}>
+        <span style={{color:C.muted}}>{x.l}</span>
+        <span style={{fontWeight:"700"}}>{x.v}</span>
+      </div>)}
+    </div>
+
+    {/* Export */}
+    <div style={st.card}>
+      <div style={{fontSize:10,color:C.muted,fontWeight:"700",letterSpacing:1,marginBottom:10}}>EXPORTAR DATOS</div>
+      <button onClick={exportCSV} style={{...st.ghost,width:"100%",textAlign:"center"}}>EXPORTAR CSV PARA GOOGLE SHEETS</button>
+    </div>
+
+    {/* Info */}
+    <div style={{...st.card,background:"#fff8e1",borderColor:C.orange+"44"}}>
+      <div style={{fontSize:10,color:C.orange,fontWeight:"700",letterSpacing:1,marginBottom:8}}>⚠️ CIÁTICO — RECORDATORIO</div>
+      <div style={{fontSize:12,color:C.text,lineHeight:1.7}}>Si sentís hormigueo hacia la pierna: <strong>pará inmediatamente</strong>. La natación es el deporte más seguro. Siempre calentá antes de entrar al agua.</div>
+    </div>
+
+    {/* Reset PIN */}
+    <div style={st.card}>
+      <div style={{fontSize:10,color:C.muted,fontWeight:"700",letterSpacing:1,marginBottom:8}}>🔒 ACCESO</div>
+      <button onClick={()=>{ls.s("tl-pin-v2","");window.location.reload();}} style={{...st.ghost,width:"100%",textAlign:"center",color:C.red,borderColor:C.red+"55",fontSize:12}}>CERRAR SESIÓN / CAMBIAR PIN</button>
+    </div>
+
+    {/* Install */}
+    <div style={{...st.card,background:C.poolBg,borderColor:C.pool+"33"}}>
+      <div style={{fontSize:10,color:C.pool,fontWeight:"700",letterSpacing:1,marginBottom:8}}>📱 INSTALAR COMO APP</div>
+      <div style={{fontSize:12,color:C.text,lineHeight:1.8}}>
+        <strong>Android (Chrome):</strong> menú ⋮ → "Agregar a pantalla de inicio"<br/>
+        <strong>iPhone (Safari):</strong> compartir □ → "Añadir a pantalla de inicio"
+      </div>
+    </div>
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── PIN LOCK ─────────────────────────────────────────────────
+function PinLock({onUnlock}){
+  const [pin,setPin] = useState("");
+  const saved = ls.g("tl-pin-v2")||"";
+  const [step,setStep] = useState(saved?"enter":"create");
+  const [confirm,setConfirm] = useState("");
+  const [error,setError] = useState("");
+
+  function press(d){
+    if(d==="del")setPin(p=>p.slice(0,-1));
+    else if(pin.length<6)setPin(p=>p+d);
+  }
+  function handleAction(){
+    if(step==="enter"){
+      if(pin===saved){sessionStorage.setItem("tl-ok","1");onUnlock();}
+      else{setError("PIN incorrecto");setPin("");}
+    } else if(step==="create"){
+      if(pin.length<4){setError("Mínimo 4 dígitos");return;}
+      setConfirm(pin);setStep("confirm");setPin("");setError("");
+    } else {
+      if(pin!==confirm){setError("No coinciden");setPin("");return;}
+      ls.s("tl-pin-v2",pin);sessionStorage.setItem("tl-ok","1");onUnlock();
+    }
+  }
+
+  const keys=[["1","2","3"],["4","5","6"],["7","8","9"],["","0","del"]];
+  return <div style={{minHeight:"100vh",background:"#fff",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:32}}>
+    <div style={{color:C.pool,fontSize:28,fontWeight:"800",letterSpacing:4,marginBottom:8}}>TRAINLOG</div>
+    <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:40,fontWeight:"700"}}>
+      {step==="enter"?"INGRESÁ TU PIN":step==="create"?"CREAR PIN":"CONFIRMAR PIN"}
+    </div>
+    <div style={{display:"flex",gap:14,marginBottom:32}}>
+      {Array.from({length:6},(_,i)=><div key={i} style={{width:13,height:13,borderRadius:"50%",background:i<pin.length?C.pool:C.border,transition:"background 0.1s"}}/>)}
+    </div>
+    {error&&<div style={{color:C.red,fontSize:12,marginBottom:16,fontWeight:"600"}}>{error}</div>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,72px)",gap:12,marginBottom:32}}>
+      {keys.map((row,ri)=>row.map((k,ki)=>k===""?<div key={ki}/>:<button key={ki} onClick={()=>press(k)} style={{width:72,height:72,borderRadius:"50%",background:k==="del"?"transparent":"#f5f5f5",border:"none",fontSize:k==="del"?22:24,fontWeight:"600",cursor:"pointer",color:k==="del"?C.muted:C.text}}>{k==="del"?"⌫":k}</button>))}
+    </div>
+    <button onClick={handleAction} disabled={pin.length<4} style={{...st.btn,width:200,opacity:pin.length<4?0.4:1,borderRadius:30}}>
+      {step==="enter"?"ENTRAR":step==="create"?"SIGUIENTE":"CONFIRMAR"}
+    </button>
+    {step==="enter"&&<button onClick={()=>{ls.s("tl-pin-v2","");setStep("create");setPin("");setError("");}} style={{background:"none",border:"none",color:C.muted,fontSize:11,marginTop:20,cursor:"pointer"}}>Cambiar PIN</button>}
+  </div>;
+}
+
+// ── NUTRICIÓN ────────────────────────────────────────────────
+const PLAN_DIA = [
+  {hora:"06:40", icono:"☀️", momento:"Desayuno", estrategia:"Arranque con proteína",
+   opciones:["Café con leche + 2 tostadas integrales con queso + huevo revuelto o duro","Tostadas de arroz + manteca de maní + miel + vaso de leche","Avena cocida con leche + fruta (banana o manzana)","Cereales sin azúcar + leche + 1 huevo duro aparte"],
+   clave:"Siempre proteína (huevo o queso). Sin esto llegás con hambre voraz al almuerzo.", color:"#e65100", bg:"#fff3e0"},
+  {hora:"10:00", icono:"☕", momento:"Media mañana", estrategia:"Freno del hambre",
+   opciones:["Mate o té + 1 fruta (manzana, banana o naranja)","Mate + tostada de arroz con queso o feta de jamón cocido","Mate + puñado de maní sin sal"],
+   clave:"Algo que frene la digestión. Sin esto llegás desesperado al almuerzo.", color:"#6d4c41", bg:"#efebe9"},
+  {hora:"13:00", icono:"🍽️", momento:"Almuerzo", estrategia:"Carga — el plato del día",
+   opciones:["Fideos proteicos + salsa de tomate + atún + zanahoria rallada","Arroz + zapallo hervido + pollo desmenuzado o huevo","Garbanzos salteados + cebolla + tomate + palta + huevo duro","Polenta con salsa de tomate + atún o sardinas","Frijoles/porotos con caldo + arroz + cebolla","Sándwich pan integral + pollo o queso + tomate + lechuga"],
+   clave:"Acá van los hidratos (fideos, arroz, polenta). Los quemás nadando. Comé hasta estar satisfecho.", color:"#1565c0", bg:"#e3f2fd"},
+  {hora:"16:30", icono:"🥤", momento:"Post pileta", estrategia:"Recuperación fuerte",
+   opciones:["Licuado: leche + banana + 3 cdas avena (+ 1 cdita chía opcional)","Yogur + fruta + tostada con queso","Leche + 2 tostadas con manteca de maní"],
+   clave:"El músculo absorbe nutrientes hasta 60 min post-ejercicio. No saltearlo. La avena frena el hambre nocturno.", color:"#2e7d32", bg:"#e8f5e9"},
+  {hora:"21:00-22:00", icono:"🌙", momento:"Cena familiar", estrategia:"Porción 2 puños — proteína + verde",
+   opciones:["Milanesa chica + ensalada lechuga/tomate + papa hervida (chica)","Omelette 2-3 huevos + ensalada + tostada integral","Atún o sardinas + ensalada zanahoria/lechuga + tostada de arroz","Huevos revueltos + verdura salteada + pan integral","Lo que haya en familia: mucha carne/pollo/pescado, poca papa, mucha ensalada"],
+   clave:"Volumen máximo: tus dos puños juntos. Sin hidratos grandes. Caminar 10 min después antes de sentarse.", color:"#4527a0", bg:"#ede7f6"},
+  {hora:"Post-cena", icono:"💊", momento:"Colágeno para articulaciones", estrategia:"Gelatina sin sabor",
+   opciones:["1 cda sopera de gelatina sin sabor en agua caliente con jugo de naranja o limón","Tomarla antes de dormir (el cuerpo repara cartílago durante el sueño)"],
+   clave:"Diferente a la gelatina de postre. La de postre es rica pero no aporta colágeno útil.", color:"#00695c", bg:"#e0f2f1"},
+];
+
+const REGLAS = [
+  {n:"1", regla:"Proteína en el desayuno", detalle:"Huevo, queso o manteca de maní siempre."},
+  {n:"2", regla:"Hidratos solo en el almuerzo", detalle:"Fideos, arroz, polenta: solo al mediodía."},
+  {n:"3", regla:"Cena: porción de 2 puños", detalle:"Aunque tengas hambre — el licuado te llenó."},
+  {n:"4", regla:"Cocina cerrada a las 22:30", detalle:"Si hay hambre: agua con gas o mate lavado."},
+  {n:"5", regla:"Mate hasta las 17:30", detalle:"Después: mate lavado o té de hierbas."},
+  {n:"6", regla:"Gelatina sin sabor post-cena", detalle:"Con jugo de naranja o limón. Para las articulaciones."},
+  {n:"7", regla:"Caminar 10 min post-cena", detalle:"Antes de sentarse. Evita el reflujo nocturno."},
+  {n:"8", regla:"Dormir del lado izquierdo", detalle:"Posición que evita que el ácido suba al esófago."},
+];
+
+const ANTI_REFLUJO = [
+  "Cena máximo del tamaño de dos puños — aunque la familia coma más.",
+  "Evitar frituras y queso derretido abundante a la noche.",
+  "No tomar mucho líquido durante la cena — tomá agua durante el día.",
+  "Caminar 10 minutos post-cena antes de sentarse o acostarse.",
+  "Dormir del lado izquierdo — la forma del estómago evita que el ácido suba.",
+  "Si cenaste pasta o arroz: porción chica y completar con proteína (huevo, atún).",
+];
+
+const ALIMENTOS_CLAVE = [
+  {nombre:"Atún y sardinas", frec:"3-4 veces/semana", nota:"Omega-3 baja triglicéridos"},
+  {nombre:"Palta", frec:"2-3 veces/semana", nota:"Grasa buena, sacia bien"},
+  {nombre:"Garbanzos y frijoles", frec:"2-3 veces/semana", nota:"Proteína vegetal + fibra"},
+  {nombre:"Brócoli", frec:"2-3 veces/semana", nota:"Vitamina C para el colágeno"},
+  {nombre:"Avena", frec:"Todos los días", nota:"Baja colesterol LDL"},
+  {nombre:"Chía", frec:"1 cdita/día en licuado", nota:"Omega-3 + fibra soluble"},
+  {nombre:"Huevo", frec:"1-2 por día", nota:"Proteína completa"},
+  {nombre:"Pan integral panadería", frec:"Desayuno o cena", nota:"Mejor que el blanco"},
+];
+
+function Nutricion({logs,addLog}){
+  const [seccion,setSeccion] = useState("plan"); // plan | reglas | registro | alimentos
+  const [registroFecha,setRegistroFecha] = useState(today());
+  const [registros,setRegistros] = useState({});
+  const [saved,setSaved] = useState(false);
+
+  // Cargar registros del día
+  const registrosHoy = logs.filter(l=>l.type==="food"&&l.date===registroFecha);
+
+  function guardarRegistro(momento,texto){
+    if(!texto.trim()) return;
+    addLog({
+      id:"food_"+registroFecha+"_"+momento.replace(/\s/g,"_")+"_"+Date.now(),
+      date:registroFecha,
+      type:"food",
+      label:momento,
+      notes:texto,
+    });
+    setRegistros(p=>({...p,[momento]:""}));
+    setSaved(true);
+    setTimeout(()=>setSaved(false),1500);
+  }
+
+  const TABS_N=[
+    {id:"plan",label:"📋 Plan del día"},
+    {id:"reglas",label:"✅ Reglas"},
+    {id:"registro",label:"📝 Registrar"},
+    {id:"alimentos",label:"🥗 Alimentos"},
+  ];
+
+  return <div>
+    {/* Sub-tabs */}
+    <div style={{display:"flex",gap:4,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
+      {TABS_N.map(t=><button key={t.id} onClick={()=>setSeccion(t.id)} style={{background:seccion===t.id?"#1565c0":"#fff",color:seccion===t.id?"#fff":"#777",border:"1px solid "+(seccion===t.id?"#1565c0":"#e8eaed"),borderRadius:20,padding:"7px 14px",fontSize:11,fontWeight:"700",cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{t.label}</button>)}
+    </div>
+
+    {/* ── PLAN DEL DÍA ── */}
+    {seccion==="plan"&&<div>
+      <div style={{background:"#e3f2fd",border:"1px solid #1565c033",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+        <div style={{fontSize:11,color:"#1565c0",fontWeight:"700",marginBottom:4}}>💡 ESTRATEGIA CENTRAL</div>
+        <div style={{fontSize:13,color:"#1a1a1a",lineHeight:1.6}}>Carga frontal: más calorías e hidratos en la primera mitad del día. La cena es la comida más pequeña. Si el licuado post-pileta es bueno, llegás a la cena sin hambre voraz y evitás el dolor de estómago.</div>
+      </div>
+      {PLAN_DIA.map((p,i)=>{
+        const [open,setOpen]=useState(false);
+        return <div key={i} style={{background:"#fff",border:"1px solid #e8eaed",borderLeft:"4px solid "+p.color,borderRadius:"0 12px 12px 0",padding:"12px 14px",marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}} onClick={()=>setOpen(!open)}>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:3}}>
+                <span style={{fontSize:18}}>{p.icono}</span>
+                <span style={{fontSize:11,color:p.color,fontWeight:"700",letterSpacing:1}}>{p.hora}</span>
+                <span style={{fontSize:13,fontWeight:"700",color:"#1a1a1a"}}>{p.momento}</span>
+              </div>
+              <div style={{fontSize:11,color:p.color,fontWeight:"600"}}>{p.estrategia}</div>
+            </div>
+            <span style={{color:"#aaa",fontSize:16,flexShrink:0,marginTop:2}}>{open?"▲":"▼"}</span>
+          </div>
+          {open&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #e8eaed"}}>
+            <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:8}}>OPCIONES</div>
+            {p.opciones.map((o,oi)=><div key={oi} style={{background:p.bg,borderRadius:8,padding:"8px 12px",marginBottom:6,fontSize:12,color:"#1a1a1a",lineHeight:1.5}}>• {o}</div>)}
+            <div style={{background:"#fff9c4",border:"1px solid #f9a825",borderRadius:8,padding:"8px 12px",marginTop:8,fontSize:12,color:"#5d4037",fontWeight:"600",lineHeight:1.5}}>💡 {p.clave}</div>
+          </div>}
+        </div>;
+      })}
+    </div>}
+
+    {/* ── REGLAS ── */}
+    {seccion==="reglas"&&<div>
+      <div style={{background:"#fff3e0",border:"1px solid #e6510033",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+        <div style={{fontSize:11,color:"#e65100",fontWeight:"700",marginBottom:4}}>⚠️ EL PUÑO EN LA BOCA DEL ESTÓMAGO</div>
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.6,marginBottom:8}}>Es una señal de reflujo. Ocurre cuando cenás abundante y te acostás con el estómago lleno. Estas reglas lo eliminan:</div>
+        {ANTI_REFLUJO.map((r,i)=><div key={i} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:i<ANTI_REFLUJO.length-1?"1px solid #e8eaed":"none",fontSize:12,alignItems:"flex-start"}}>
+          <span style={{color:"#e65100",fontWeight:"700",flexShrink:0,marginTop:1}}>→</span>
+          <span style={{lineHeight:1.5}}>{r}</span>
+        </div>)}
+      </div>
+      <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:12}}>LAS 8 REGLAS QUE NO CAMBIAN</div>
+      {REGLAS.map((r,i)=><div key={i} style={{background:i%2===0?"#f5f6f8":"#fff",border:"1px solid #e8eaed",borderRadius:10,padding:"12px 14px",marginBottom:8,display:"flex",gap:12,alignItems:"flex-start"}}>
+        <div style={{width:28,height:28,borderRadius:"50%",background:"#1565c0",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:"800",flexShrink:0}}>{r.n}</div>
+        <div>
+          <div style={{fontSize:13,fontWeight:"700",color:"#1a1a1a"}}>{r.regla}</div>
+          <div style={{fontSize:11,color:"#777",marginTop:3}}>{r.detalle}</div>
+        </div>
+      </div>)}
+      <div style={{background:"#e8f5e9",border:"1px solid #2e7d3233",borderRadius:12,padding:"12px 14px",marginTop:4}}>
+        <div style={{fontSize:11,color:"#2e7d32",fontWeight:"700",marginBottom:4}}>💊 ROSUVASTATINA — RECORDATORIO</div>
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.7}}>
+          Dosis actual: <strong>5 mg/día</strong> (mitad de la pastilla de 10 mg).<br/>
+          Tomarla siempre <strong>a la noche</strong> antes de dormir.<br/>
+          Laboratorio de mayo: pedir agregar <strong>HbA1c</strong> a la orden que ya tenés.<br/>
+          Control cardiológico: <strong>junio 2026</strong>.
+        </div>
+      </div>
+    </div>}
+
+    {/* ── REGISTRO ── */}
+    {seccion==="registro"&&<div>
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:6}}>FECHA</div>
+        <input type="date" value={registroFecha} onChange={e=>setRegistroFecha(e.target.value)} style={{background:"#f5f6f8",border:"1px solid #e8eaed",borderRadius:10,padding:"11px 14px",color:"#1a1a1a",fontSize:14,width:"100%",outline:"none"}}/>
+      </div>
+
+      {saved&&<div style={{background:"#e8f5e9",border:"1px solid #2e7d3233",borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:"center",fontSize:13,color:"#2e7d32",fontWeight:"700"}}>✅ Guardado</div>}
+
+      {/* Registros del día */}
+      {registrosHoy.length>0&&<div style={{background:"#fff",border:"1px solid #e8eaed",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+        <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:10}}>LO QUE REGISTRASTE HOY</div>
+        {registrosHoy.map((r,i)=><div key={r.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:i<registrosHoy.length-1?"1px solid #e8eaed":"none",alignItems:"flex-start"}}>
+          <span style={{fontSize:16,flexShrink:0}}>
+            {r.label.includes("Desayuno")?"☀️":r.label.includes("Mañana")?"☕":r.label.includes("Almuerzo")?"🍽️":r.label.includes("Pileta")?"🥤":r.label.includes("Cena")?"🌙":"📝"}
+          </span>
+          <div>
+            <div style={{fontSize:11,fontWeight:"700",color:"#555"}}>{r.label}</div>
+            <div style={{fontSize:12,color:"#1a1a1a",marginTop:2}}>{r.notes}</div>
+          </div>
+        </div>)}
+      </div>}
+
+      {/* Formularios por momento */}
+      {PLAN_DIA.map((p,i)=>{
+        const key=p.momento;
+        return <div key={i} style={{background:"#fff",border:"1px solid #e8eaed",borderLeft:"4px solid "+p.color,borderRadius:"0 12px 12px 0",padding:"12px 14px",marginBottom:10}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+            <span style={{fontSize:16}}>{p.icono}</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:"700"}}>{p.momento}</div>
+              <div style={{fontSize:10,color:p.color,fontWeight:"600"}}>{p.hora}</div>
+            </div>
+          </div>
+          <textarea
+            value={registros[key]||""}
+            onChange={e=>setRegistros(r=>({...r,[key]:e.target.value}))}
+            style={{background:"#f5f6f8",border:"1px solid #e8eaed",borderRadius:8,padding:"10px 12px",color:"#1a1a1a",fontSize:13,width:"100%",outline:"none",resize:"none",height:60}}
+            placeholder={"Ej: "+p.opciones[0].slice(0,40)+"..."}
+          />
+          <button
+            onClick={()=>guardarRegistro(key,registros[key]||"")}
+            disabled={!registros[key]?.trim()}
+            style={{background:p.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,fontWeight:"700",cursor:"pointer",marginTop:8,opacity:!registros[key]?.trim()?0.4:1}}
+          >Guardar {p.icono}</button>
+        </div>;
+      })}
+    </div>}
+
+    {/* ── ALIMENTOS CLAVE ── */}
+    {seccion==="alimentos"&&<div>
+      <div style={{background:"#e8f5e9",border:"1px solid #2e7d3233",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+        <div style={{fontSize:11,color:"#2e7d32",fontWeight:"700",marginBottom:4}}>🐟 OMEGA-3 — EL MÁS IMPORTANTE</div>
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.6}}>Atún, sardinas y chía son los tres que más van a bajar tus triglicéridos de 170. Tratar de incluir al menos uno de los tres en el almuerzo o la cena todos los días.</div>
+      </div>
+      {ALIMENTOS_CLAVE.map((a,i)=><div key={i} style={{background:i%2===0?"#f5f6f8":"#fff",border:"1px solid #e8eaed",borderRadius:10,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:"700",color:"#1a1a1a"}}>{a.nombre}</div>
+          <div style={{fontSize:11,color:"#777",marginTop:2}}>{a.nota}</div>
+        </div>
+        <div style={{background:"#e3f2fd",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#1565c0",fontWeight:"700",flexShrink:0,marginLeft:10,textAlign:"center"}}>{a.frec}</div>
+      </div>)}
+      <div style={{background:"#e0f2f1",border:"1px solid #00695c33",borderRadius:12,padding:"12px 14px",marginTop:4}}>
+        <div style={{fontSize:11,color:"#00695c",fontWeight:"700",marginBottom:8}}>💧 HIDRATACIÓN</div>
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.7}}>
+          Objetivo: <strong>2 litros por día</strong>.<br/>
+          1 vaso grande al despertar antes del café.<br/>
+          Llegar a la pileta con 1 litro ya tomado.<br/>
+          Poco líquido durante la cena (evita reflujo).<br/>
+          Mate con cafeína: solo hasta las <strong>17:30 hs</strong>.
+        </div>
+      </div>
+      <div style={{background:"#fce4ec",border:"1px solid #c6285033",borderRadius:12,padding:"12px 14px",marginTop:10}}>
+        <div style={{fontSize:11,color:"#c62850",fontWeight:"700",marginBottom:8}}>🚫 REDUCIR EN LA CENA</div>
+        {["Fideos, arroz o polenta en cantidad grande","Frituras y queso derretido abundante","Carne con mucha grasa (costilla, asado de tira)",
+          "Pan en cantidad","Dulces y galletitas"].map((r,i)=><div key={i} style={{fontSize:12,padding:"4px 0",borderBottom:i<4?"1px solid #fce4ec":"none",color:"#1a1a1a"}}>✗ {r}</div>)}
+      </div>
+      <div style={{height:20}}/>
+    </div>}
+
+    <div style={{height:20}}/>
+  </div>;
+}
+
+// ── APP ───────────────────────────────────────────────────────
+function App(){
+  const [unlocked,setUnlocked] = useState(()=>!!sessionStorage.getItem("tl-ok"));
+  const [tab,setTab] = useState("home");
+  const [logs,setLogs] = useState(()=>(ls.g("tl-lv5")||[]).filter(l=>l.type!=="config"));
+  const [sbUrl,setSbUrl] = useState(()=>ls.g("tl-sb-url")||"");
+  const [sbKey,setSbKey] = useState(()=>ls.g("tl-sb-key")||"");
+
+  useEffect(()=>{ls.s("tl-lv5",logs);},[logs]);
+
+  // Sync Supabase
+  useEffect(()=>{
+    if(!sbUrl||!sbKey) return;
+    sbFetch(sbUrl,sbKey).then(remote=>{
+      setLogs(prev=>{
+        if(!remote||!remote.length) return prev;
+        const remoteIds=new Set(remote.map(r=>r.id));
+        prev.forEach(l=>{if(!remoteIds.has(l.id))sbUpsert(sbUrl,sbKey,l);});
+        const localIds=new Set(prev.map(l=>l.id));
+        const merged=[...prev,...remote.filter(r=>!localIds.has(r.id))];
+        merged.sort((a,b)=>b.date.localeCompare(a.date));
+        return merged;
+      });
+    }).catch(console.error);
+  },[sbUrl,sbKey]);
+
+  function addLog(l){
+    const nl={...l};
+    setLogs(p=>[nl,...p.filter(x=>x.id!==nl.id)]);
+    sbUpsert(sbUrl,sbKey,nl);
+  }
+
+  const TAB_TITLES={home:"INICIO",swim:"NADAR",dry:"SECO EN CASA",nutri:"NUTRICIÓN",progress:"PROGRESO",settings:"CONFIGURACIÓN"};
+
+  if(!unlocked) return <PinLock onUnlock={()=>setUnlocked(true)}/>;
+
+  return <div style={{background:C.bg,color:C.text,minHeight:"100vh",maxWidth:480,margin:"0 auto",paddingBottom:70}}>
+    <Header title={TAB_TITLES[tab]} sub={tab==="home"?today():null}/>
+    <div style={{padding:"14px 14px 0"}}>
+      {tab==="home"&&<Home logs={logs} setTab={setTab}/>}
+      {tab==="swim"&&<SwimLog logs={logs} addLog={addLog}/>}
+      {tab==="dry"&&<DryLog logs={logs} addLog={addLog}/>}
+      {tab==="nutri"&&<Nutricion logs={logs} addLog={addLog}/>}
+      {tab==="progress"&&<Progress logs={logs} addLog={addLog} sbUrl={sbUrl} sbKey={sbKey}/>}
+      {tab==="settings"&&<Settings sbUrl={sbUrl} setSbUrl={setSbUrl} sbKey={sbKey} setSbKey={setSbKey} logs={logs}/>}
+    </div>
+    <Nav tab={tab} set={setTab}/>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
