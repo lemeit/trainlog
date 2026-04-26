@@ -884,6 +884,61 @@ function Settings({sbUrl,setSbUrl,sbKey,setSbKey,logs}){
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\uFEFF"+c],{type:"text/csv;charset=utf-8;"}));a.download="trainlog_"+today()+".csv";a.click();
   }
 
+  function exportParaAnalisis(){
+    const swimLogs=logs.filter(l=>l.type==="swimming").sort((a,b)=>a.date.localeCompare(b.date));
+    const sleepLogs=logs.filter(l=>l.type==="sleep").sort((a,b)=>b.date.localeCompare(a.date)).slice(0,14);
+    const pesoLogs=logs.filter(l=>l.type==="peso").sort((a,b)=>b.date.localeCompare(a.date));
+    const dryLogs=logs.filter(l=>l.type==="home").sort((a,b)=>b.date.localeCompare(a.date));
+
+    let txt="=== DATOS TRAINLOG PARA ANÁLISIS ===\n";
+    txt+="Exportado: "+today()+"\n\n";
+
+    txt+="--- SESIONES NATACIÓN ("+swimLogs.length+") ---\n";
+    swimLogs.forEach(l=>{
+      txt+=l.date+": "+l.label;
+      if(l.dist||l.distance) txt+=" | "+((l.dist||l.distance))+"m";
+      if(l.duration) txt+=" | "+l.duration+"min";
+      if(l.fc) txt+=" | FC:"+l.fc;
+      if(l.fcMax) txt+=" | FCmax:"+l.fcMax;
+      if(l.swolf) txt+=" | SWOLF:"+l.swolf;
+      if(l.kcal) txt+=" | kcal:"+l.kcal;
+      if(l.feel) txt+=" | sentí:"+l.feel;
+      if(l.ciatico) txt+=" | ciático:"+l.ciatico+"/5";
+      if(l.notes) txt+=" | "+l.notes;
+      txt+="\n";
+    });
+
+    txt+="\n--- SESIONES SECO ("+dryLogs.length+") ---\n";
+    dryLogs.slice(0,10).forEach(l=>{
+      txt+=l.date+": "+(l.blocks?l.blocks.join("+"):l.label);
+      if(l.duration) txt+=" | "+l.duration+"min";
+      if(l.feel) txt+=" | sentí:"+l.feel;
+      txt+="\n";
+    });
+
+    txt+="\n--- SUEÑO ÚLTIMAS "+sleepLogs.length+" NOCHES ---\n";
+    sleepLogs.forEach(l=>{
+      txt+=l.date+": ";
+      if(l.sleepScore) txt+="score:"+l.sleepScore;
+      if(l.duration) txt+=" | "+Math.floor(l.duration/60)+"h"+(l.duration%60)+"m";
+      if(l.sleepQuality) txt+=" | "+l.sleepQuality;
+      if(l.bodyBatMorning) txt+=" | BB:"+l.bodyBatMorning;
+      if(l.hrRest) txt+=" | FCreposo:"+l.hrRest;
+      txt+="\n";
+    });
+
+    txt+="\n--- PESO ---\n";
+    pesoLogs.slice(0,8).forEach(l=>{
+      txt+=l.date+": "+(l.distance||"?")+" kg\n";
+    });
+
+    const blob=new Blob([txt],{type:"text/plain;charset=utf-8;"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="analisis_trainlog_"+today()+".txt";
+    a.click();
+  }
+
   return <div>
     {/* Supabase */}
     <div style={{...st.card,borderLeft:"4px solid "+C.pool}}>
@@ -917,7 +972,9 @@ function Settings({sbUrl,setSbUrl,sbKey,setSbKey,logs}){
     {/* Export */}
     <div style={st.card}>
       <div style={{fontSize:10,color:C.muted,fontWeight:"700",letterSpacing:1,marginBottom:10}}>EXPORTAR DATOS</div>
-      <button onClick={exportCSV} style={{...st.ghost,width:"100%",textAlign:"center"}}>EXPORTAR CSV PARA GOOGLE SHEETS</button>
+      <button onClick={exportCSV} style={{...st.ghost,width:"100%",textAlign:"center",marginBottom:8}}>EXPORTAR CSV PARA GOOGLE SHEETS</button>
+      <button onClick={exportParaAnalisis} style={{...st.btn,background:C.green,marginBottom:4}}>📋 EXPORTAR PARA ANÁLISIS CON CLAUDE</button>
+      <div style={{fontSize:11,color:C.muted,lineHeight:1.6,marginTop:6}}>El archivo .txt generado contiene todas tus sesiones, sueño y peso en formato legible. Adjuntalo acá en Claude para obtener análisis y proyecciones completas.</div>
     </div>
 
     {/* Info */}
@@ -992,27 +1049,27 @@ function PinLock({onUnlock}){
 // ── NUTRICIÓN ────────────────────────────────────────────────
 const PLAN_DIA = [
   {hora:"06:40", icono:"☀️", momento:"Desayuno", estrategia:"Arranque con proteína",
-   opciones:["Café con leche + 2 tostadas integrales con queso + huevo revuelto o duro","Tostadas de arroz + manteca de maní + miel + vaso de leche","Avena cocida con leche + fruta (banana o manzana)","Cereales sin azúcar + leche + 1 huevo duro aparte"],
-   clave:"Siempre proteína (huevo o queso). Sin esto llegás con hambre voraz al almuerzo.", color:"#e65100", bg:"#fff3e0"},
+   opciones:["Café con leche + 2 tostadas integrales con queso + huevo revuelto o duro","Tostadas de arroz + manteca de maní + miel + vaso de leche","Avena cocida con leche + fruta (banana o manzana)","Cereales sin azúcar + leche + 1 huevo duro aparte","🆕 Yogur griego casero + banana + 1 cda avena + miel","🆕 Tostada integral + yogur griego + fruta — bowl de desayuno"],
+   clave:"Siempre proteína (huevo, queso o yogur griego). Sin esto llegás con hambre voraz al almuerzo.", color:"#e65100", bg:"#fff3e0"},
   {hora:"10:00", icono:"☕", momento:"Media mañana", estrategia:"Freno del hambre",
-   opciones:["Mate o té + 1 fruta (manzana, banana o naranja)","Mate + tostada de arroz con queso o feta de jamón cocido","Mate + puñado de maní sin sal"],
+   opciones:["Mate o té + 1 fruta (manzana, banana o naranja)","Mate + tostada de arroz con queso o feta de jamón cocido","Mate + puñado de maní sin sal","🆕 Yogur griego casero + 1 fruta — más saciante que el mate solo"],
    clave:"Algo que frene la digestión. Sin esto llegás desesperado al almuerzo.", color:"#6d4c41", bg:"#efebe9"},
   {hora:"13:00", icono:"🍽️", momento:"Almuerzo", estrategia:"Carga — el plato del día",
-   opciones:["Fideos proteicos + salsa de tomate + atún + zanahoria rallada","Arroz + zapallo hervido + pollo desmenuzado o huevo","Garbanzos salteados + cebolla + tomate + palta + huevo duro","Polenta con salsa de tomate + atún o sardinas","Frijoles/porotos con caldo + arroz + cebolla","Sándwich pan integral + pollo o queso + tomate + lechuga"],
-   clave:"Acá van los hidratos (fideos, arroz, polenta). Los quemás nadando. Comé hasta estar satisfecho.", color:"#1565c0", bg:"#e3f2fd"},
+   opciones:["Fideos proteicos + salsa de tomate + atún + zanahoria rallada","Arroz + zapallo hervido + pollo desmenuzado o huevo","Garbanzos salteados + cebolla + tomate + palta + huevo duro","Polenta con salsa de tomate + atún o sardinas","Frijoles/porotos con caldo + arroz + cebolla","Sándwich pan integral + pollo o queso + tomate + lechuga","🆕 Bowl arroz + atún + palta + zanahoria + yogur griego como aderezo"],
+   clave:"Acá van los hidratos. Los quemás nadando. Comé hasta estar satisfecho.", color:"#1565c0", bg:"#e3f2fd"},
   {hora:"16:30", icono:"🥤", momento:"Post pileta", estrategia:"Recuperación fuerte",
-   opciones:["Licuado: leche + banana + 3 cdas avena (+ 1 cdita chía opcional)","Yogur + fruta + tostada con queso","Leche + 2 tostadas con manteca de maní"],
-   clave:"El músculo absorbe nutrientes hasta 60 min post-ejercicio. No saltearlo. La avena frena el hambre nocturno.", color:"#2e7d32", bg:"#e8f5e9"},
+   opciones:["Licuado: leche + banana + 3 cdas avena (+ 1 cdita chía opcional)","🆕 Licuado proteico: leche + banana + avena + 2 cdas yogur griego","🆕 Bowl: yogur griego + banana + avena + miel — sin licuadora","Leche + 2 tostadas con manteca de maní"],
+   clave:"El músculo absorbe nutrientes hasta 60 min post-ejercicio. El yogur griego tiene el doble de proteína que el común.", color:"#2e7d32", bg:"#e8f5e9"},
   {hora:"21:00-22:00", icono:"🌙", momento:"Cena familiar", estrategia:"Porción 2 puños — proteína + verde",
-   opciones:["Milanesa chica + ensalada lechuga/tomate + papa hervida (chica)","Omelette 2-3 huevos + ensalada + tostada integral","Atún o sardinas + ensalada zanahoria/lechuga + tostada de arroz","Huevos revueltos + verdura salteada + pan integral","Lo que haya en familia: mucha carne/pollo/pescado, poca papa, mucha ensalada"],
-   clave:"Volumen máximo: tus dos puños juntos. Sin hidratos grandes. Caminar 10 min después antes de sentarse.", color:"#4527a0", bg:"#ede7f6"},
-  {hora:"Post-cena", icono:"💊", momento:"Colágeno para articulaciones", estrategia:"Gelatina sin sabor",
-   opciones:["1 cda sopera de gelatina sin sabor en agua caliente con jugo de naranja o limón","Tomarla antes de dormir (el cuerpo repara cartílago durante el sueño)"],
-   clave:"Diferente a la gelatina de postre. La de postre es rica pero no aporta colágeno útil.", color:"#00695c", bg:"#e0f2f1"},
+   opciones:["Milanesa chica + ensalada + papa hervida chica","Omelette 2-3 huevos + ensalada + tostada integral","Atún o sardinas + ensalada zanahoria/lechuga + tostada","Huevos revueltos + verdura salteada + pan integral","🆕 Omelette con yogur griego: 2 huevos + 1 cda yogur — más esponjoso y proteico","Lo que haya en familia: mucha proteína, poca papa, mucha ensalada"],
+   clave:"Volumen máximo: tus dos puños juntos. Sin hidratos grandes. Caminar 10 min después.", color:"#4527a0", bg:"#ede7f6"},
+  {hora:"Post-cena", icono:"💊", momento:"Colágeno + probióticos", estrategia:"Gelatina sin sabor + yogur",
+   opciones:["1 cda sopera de gelatina sin sabor en agua caliente con jugo de naranja o limón","🆕 Yogur griego casero como postre — probióticos que mejoran la digestión nocturna","Los dos juntos: gelatina para el colágeno + yogur para los probióticos"],
+   clave:"La yogurtera fue una excelente inversión. Probióticos vivos + colágeno = articulaciones y digestión.", color:"#00695c", bg:"#e0f2f1"},
 ];
 
 const REGLAS = [
-  {n:"1", regla:"Proteína en el desayuno", detalle:"Huevo, queso o manteca de maní siempre."},
+  {n:"1", regla:"Proteína en el desayuno", detalle:"Huevo, queso, yogur griego o manteca de maní siempre."},
   {n:"2", regla:"Hidratos solo en el almuerzo", detalle:"Fideos, arroz, polenta: solo al mediodía."},
   {n:"3", regla:"Cena: porción de 2 puños", detalle:"Aunque tengas hambre — el licuado te llenó."},
   {n:"4", regla:"Cocina cerrada a las 22:30", detalle:"Si hay hambre: agua con gas o mate lavado."},
@@ -1020,6 +1077,7 @@ const REGLAS = [
   {n:"6", regla:"Gelatina sin sabor post-cena", detalle:"Con jugo de naranja o limón. Para las articulaciones."},
   {n:"7", regla:"Caminar 10 min post-cena", detalle:"Antes de sentarse. Evita el reflujo nocturno."},
   {n:"8", regla:"Dormir del lado izquierdo", detalle:"Posición que evita que el ácido suba al esófago."},
+  {n:"9", regla:"Yogur griego en al menos 1 comida", detalle:"Probióticos que mejoran la digestión y reducen la inflamación."},
 ];
 
 const ANTI_REFLUJO = [
@@ -1032,15 +1090,63 @@ const ANTI_REFLUJO = [
 ];
 
 const ALIMENTOS_CLAVE = [
-  {nombre:"Atún y sardinas", frec:"3-4 veces/semana", nota:"Omega-3 baja triglicéridos"},
-  {nombre:"Palta", frec:"2-3 veces/semana", nota:"Grasa buena, sacia bien"},
-  {nombre:"Garbanzos y frijoles", frec:"2-3 veces/semana", nota:"Proteína vegetal + fibra"},
-  {nombre:"Brócoli", frec:"2-3 veces/semana", nota:"Vitamina C para el colágeno"},
-  {nombre:"Avena", frec:"Todos los días", nota:"Baja colesterol LDL"},
-  {nombre:"Chía", frec:"1 cdita/día en licuado", nota:"Omega-3 + fibra soluble"},
-  {nombre:"Huevo", frec:"1-2 por día", nota:"Proteína completa"},
-  {nombre:"Pan integral panadería", frec:"Desayuno o cena", nota:"Mejor que el blanco"},
+  {nombre:"🥛 Yogur griego casero", frec:"1-2 veces/día", nota:"10g proteína/100g · Probióticos vivos · Económico"},
+  {nombre:"🐟 Atún y sardinas", frec:"3-4 veces/semana", nota:"Omega-3 baja triglicéridos — el más importante"},
+  {nombre:"🥑 Palta", frec:"2-3 veces/semana", nota:"Grasa buena, sacia bien, sube HDL"},
+  {nombre:"🫘 Garbanzos y frijoles", frec:"2-3 veces/semana", nota:"Proteína vegetal + fibra soluble"},
+  {nombre:"🥦 Brócoli", frec:"2-3 veces/semana", nota:"Vitamina C para el colágeno"},
+  {nombre:"🌾 Avena", frec:"Todos los días", nota:"Beta-glucano baja colesterol LDL"},
+  {nombre:"🌱 Chía", frec:"1 cdita/día en licuado", nota:"Omega-3 vegetal + fibra"},
+  {nombre:"🥚 Huevo", frec:"1-2 por día", nota:"Proteína completa — consumo diario avalado"},
+  {nombre:"🧀 Queso port salut", frec:"Desayuno y cenas", nota:"Proteína + calcio"},
+  {nombre:"🍞 Pan integral panadería", frec:"Desayuno o cena", nota:"Más fibra que el pan blanco"},
 ];
+
+const RECETAS = [
+  {nombre:"🥛 Yogur griego casero", tiempo:"5 min + 8hs fermentación", color:"#00695c", bg:"#e0f2f1",
+   ingredientes:["1 litro de leche entera o descremada","2-3 cdas de yogur natural como fermento","Yogurtera"],
+   pasos:["Calentar la leche a 40-45°C — tibia, no caliente.","Mezclar bien con las cdas de yogur en un bowl.","Volcar en los frascos de la yogurtera y fermentar 8 horas.","Refrigerar al menos 4 horas antes de consumir.","Para hacerlo griego: colar con lienzo en la heladera 2-3 hs. El suero que sale se puede tomar.","Guardar tapado hasta 7-10 días. Reservar 2-3 cdas como fermento para la próxima vez."],
+   nota:"Con 1 litro obtenés ~800g de yogur o ~450g de griego colado. Costo: el de la leche."},
+  {nombre:"🥣 Bowl post-pileta — 5 minutos", tiempo:"5 min", color:"#2e7d32", bg:"#e8f5e9",
+   ingredientes:["4 cdas yogur griego casero","1 banana en rodajas","2 cdas avena cruda","1 cdita miel","Opcional: 1 cdita chía"],
+   pasos:["Poner el yogur en un bowl.","Agregar la avena cruda — se hidrata en 2-3 min con el yogur.","Agregar banana y miel. Listo."],
+   nota:"Proteína: ~18g. Ideal cuando no tenés ganas de licuadora. La avena cruda con yogur queda cremosa."},
+  {nombre:"🥗 Bowl de almuerzo rápido", tiempo:"10 min", color:"#1565c0", bg:"#e3f2fd",
+   ingredientes:["1 taza arroz cocido","1 lata de atún en agua","½ palta","Zanahoria rallada","1 cda yogur griego (aderezo)","Jugo de limón + sal"],
+   pasos:["Calentar el arroz 1 min.","Agregar el atún escurrido, zanahoria y palta en cubos.","Mezclar yogur con jugo de limón y sal. Volcar encima."],
+   nota:"Proteína: ~30g. El yogur reemplaza la mayonesa con más proteína y menos grasa saturada."},
+  {nombre:"🍳 Omelette proteico", tiempo:"5 min", color:"#4527a0", bg:"#ede7f6",
+   ingredientes:["3 huevos","1 cda yogur griego","Sal y pimienta","Verdura a elección"],
+   pasos:["Batir huevos con el yogur — queda más esponjoso.","Saltear la verdura brevemente.","Agregar la mezcla y cocinar 2-3 min a fuego medio. Doblar y servir."],
+   nota:"El yogur en el omelette suma proteína y lo hace más esponjoso. Ideal para cenas livianas."},
+  {nombre:"🥤 Licuado proteico post-pileta", tiempo:"2 min", color:"#2e7d32", bg:"#e8f5e9",
+   ingredientes:["1 vaso leche","1 banana","3 cdas avena cruda","2 cdas yogur griego","1 cdita miel","Opcional: 1 cdita chía"],
+   pasos:["Poner todo en la licuadora.","Licuar 30 segundos. Tomar inmediatamente."],
+   nota:"Proteína: ~22g. Versión mejorada del licuado original. El yogur no cambia el sabor pero duplica la proteína."},
+];
+
+function RecetaItem({r}){
+  const [open,setOpen] = useState(false);
+  return <div style={{background:"#fff",border:"1px solid #e8eaed",borderLeft:"4px solid "+r.color,borderRadius:"0 12px 12px 0",padding:"12px 14px",marginBottom:10}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}} onClick={()=>setOpen(!open)}>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13,fontWeight:"700",color:"#1a1a1a"}}>{r.nombre}</div>
+        <div style={{fontSize:11,color:r.color,fontWeight:"600",marginTop:3}}>⏱ {r.tiempo}</div>
+      </div>
+      <span style={{color:"#aaa",fontSize:16,flexShrink:0,marginTop:2}}>{open?"▲":"▼"}</span>
+    </div>
+    {open&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #e8eaed"}}>
+      <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:6}}>INGREDIENTES</div>
+      {r.ingredientes.map((ing,i)=><div key={i} style={{fontSize:12,padding:"3px 0",color:"#333"}}>• {ing}</div>)}
+      <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,margin:"10px 0 6px"}}>PREPARACIÓN</div>
+      {r.pasos.map((paso,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:6,fontSize:12,alignItems:"flex-start"}}>
+        <span style={{background:r.color,color:"#fff",borderRadius:"50%",width:18,height:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:"700",flexShrink:0,marginTop:1}}>{i+1}</span>
+        <span style={{lineHeight:1.5,color:"#1a1a1a"}}>{paso}</span>
+      </div>)}
+      <div style={{background:"#fff9c4",border:"1px solid #f9a825",borderRadius:8,padding:"8px 12px",marginTop:8,fontSize:12,color:"#5d4037",lineHeight:1.5}}>💡 {r.nota}</div>
+    </div>}
+  </div>;
+}
 
 function PlanDiaItem({p}){
   const [open,setOpen] = useState(false);
@@ -1058,171 +1164,119 @@ function PlanDiaItem({p}){
     </div>
     {open&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #e8eaed"}}>
       <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:8}}>OPCIONES</div>
-      {p.opciones.map((o,oi)=><div key={oi} style={{background:p.bg,borderRadius:8,padding:"8px 12px",marginBottom:6,fontSize:12,color:"#1a1a1a",lineHeight:1.5}}>• {o}</div>)}
+      {p.opciones.map((o,oi)=><div key={oi} style={{background:p.bg,borderRadius:8,padding:"8px 12px",marginBottom:6,fontSize:12,color:"#1a1a1a",lineHeight:1.5}}>{o}</div>)}
       <div style={{background:"#fff9c4",border:"1px solid #f9a825",borderRadius:8,padding:"8px 12px",marginTop:8,fontSize:12,color:"#5d4037",fontWeight:"600",lineHeight:1.5}}>💡 {p.clave}</div>
     </div>}
   </div>;
 }
 
 function Nutricion({logs,addLog}){
-  const [seccion,setSeccion] = useState("plan"); // plan | reglas | registro | alimentos
+  const [seccion,setSeccion] = useState("plan");
   const [registroFecha,setRegistroFecha] = useState(today());
   const [registros,setRegistros] = useState({});
   const [saved,setSaved] = useState(false);
-
-  // Cargar registros del día
   const registrosHoy = logs.filter(l=>l.type==="food"&&l.date===registroFecha);
 
   function guardarRegistro(momento,texto){
     if(!texto.trim()) return;
-    addLog({
-      id:"food_"+registroFecha+"_"+momento.replace(/\s/g,"_")+"_"+Date.now(),
-      date:registroFecha,
-      type:"food",
-      label:momento,
-      notes:texto,
-    });
+    addLog({id:"food_"+registroFecha+"_"+momento.replace(/\s/g,"_")+"_"+Date.now(),date:registroFecha,type:"food",label:momento,notes:texto});
     setRegistros(p=>({...p,[momento]:""}));
     setSaved(true);
     setTimeout(()=>setSaved(false),1500);
   }
 
-  const TABS_N=[
-    {id:"plan",label:"📋 Plan del día"},
-    {id:"reglas",label:"✅ Reglas"},
-    {id:"registro",label:"📝 Registrar"},
-    {id:"alimentos",label:"🥗 Alimentos"},
-  ];
+  const TABS_N=[{id:"plan",label:"📋 Plan"},{id:"recetas",label:"👨\u200d🍳 Recetas"},{id:"reglas",label:"✅ Reglas"},{id:"registro",label:"📝 Registrar"},{id:"alimentos",label:"🥗 Alimentos"}];
 
   return <div>
-    {/* Sub-tabs */}
     <div style={{display:"flex",gap:4,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
       {TABS_N.map(t=><button key={t.id} onClick={()=>setSeccion(t.id)} style={{background:seccion===t.id?"#1565c0":"#fff",color:seccion===t.id?"#fff":"#777",border:"1px solid "+(seccion===t.id?"#1565c0":"#e8eaed"),borderRadius:20,padding:"7px 14px",fontSize:11,fontWeight:"700",cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{t.label}</button>)}
     </div>
-
-    {/* ── PLAN DEL DÍA ── */}
     {seccion==="plan"&&<div>
+      <div style={{background:"#e0f2f1",border:"1px solid #00695c33",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+        <div style={{fontSize:11,color:"#00695c",fontWeight:"700",marginBottom:4}}>🆕 YOGURTERA EN CASA</div>
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.6}}>El yogur griego casero es proteína barata, probióticos reales y sin azúcar. Usalo en desayuno, post-pileta y cena. Ver receta en 👨‍🍳 Recetas.</div>
+      </div>
       <div style={{background:"#e3f2fd",border:"1px solid #1565c033",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
         <div style={{fontSize:11,color:"#1565c0",fontWeight:"700",marginBottom:4}}>💡 ESTRATEGIA CENTRAL</div>
-        <div style={{fontSize:13,color:"#1a1a1a",lineHeight:1.6}}>Carga frontal: más calorías e hidratos en la primera mitad del día. La cena es la comida más pequeña. Si el licuado post-pileta es bueno, llegás a la cena sin hambre voraz y evitás el dolor de estómago.</div>
+        <div style={{fontSize:13,color:"#1a1a1a",lineHeight:1.6}}>Carga frontal: más calorías e hidratos en la primera mitad del día. La cena es la comida más pequeña.</div>
       </div>
       {PLAN_DIA.map((p,i)=><PlanDiaItem key={i} p={p}/>)}
     </div>}
-
-    {/* ── REGLAS ── */}
+    {seccion==="recetas"&&<div>
+      <div style={{background:"#e0f2f1",border:"1px solid #00695c33",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+        <div style={{fontSize:11,color:"#00695c",fontWeight:"700",marginBottom:4}}>👨‍🍳 RECETAS SIMPLES CON LO QUE TENÉS</div>
+        <div style={{fontSize:12,color:"#1a1a1a"}}>Todas usan ingredientes que ya tenés en casa. Tocá cada una para ver el paso a paso.</div>
+      </div>
+      {RECETAS.map((r,i)=><RecetaItem key={i} r={r}/>)}
+    </div>}
     {seccion==="reglas"&&<div>
       <div style={{background:"#fff3e0",border:"1px solid #e6510033",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
         <div style={{fontSize:11,color:"#e65100",fontWeight:"700",marginBottom:4}}>⚠️ EL PUÑO EN LA BOCA DEL ESTÓMAGO</div>
-        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.6,marginBottom:8}}>Es una señal de reflujo. Ocurre cuando cenás abundante y te acostás con el estómago lleno. Estas reglas lo eliminan:</div>
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.6,marginBottom:8}}>Es reflujo. Ocurre cuando cenás abundante y te acostás con el estómago lleno:</div>
         {ANTI_REFLUJO.map((r,i)=><div key={i} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:i<ANTI_REFLUJO.length-1?"1px solid #e8eaed":"none",fontSize:12,alignItems:"flex-start"}}>
           <span style={{color:"#e65100",fontWeight:"700",flexShrink:0,marginTop:1}}>→</span>
           <span style={{lineHeight:1.5}}>{r}</span>
         </div>)}
       </div>
-      <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:12}}>LAS 8 REGLAS QUE NO CAMBIAN</div>
+      <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:12}}>LAS 9 REGLAS QUE NO CAMBIAN</div>
       {REGLAS.map((r,i)=><div key={i} style={{background:i%2===0?"#f5f6f8":"#fff",border:"1px solid #e8eaed",borderRadius:10,padding:"12px 14px",marginBottom:8,display:"flex",gap:12,alignItems:"flex-start"}}>
         <div style={{width:28,height:28,borderRadius:"50%",background:"#1565c0",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:"800",flexShrink:0}}>{r.n}</div>
-        <div>
-          <div style={{fontSize:13,fontWeight:"700",color:"#1a1a1a"}}>{r.regla}</div>
-          <div style={{fontSize:11,color:"#777",marginTop:3}}>{r.detalle}</div>
-        </div>
+        <div><div style={{fontSize:13,fontWeight:"700",color:"#1a1a1a"}}>{r.regla}</div><div style={{fontSize:11,color:"#777",marginTop:3}}>{r.detalle}</div></div>
       </div>)}
       <div style={{background:"#e8f5e9",border:"1px solid #2e7d3233",borderRadius:12,padding:"12px 14px",marginTop:4}}>
-        <div style={{fontSize:11,color:"#2e7d32",fontWeight:"700",marginBottom:4}}>💊 ROSUVASTATINA — RECORDATORIO</div>
-        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.7}}>
-          Dosis actual: <strong>5 mg/día</strong> (mitad de la pastilla de 10 mg).<br/>
-          Tomarla siempre <strong>a la noche</strong> antes de dormir.<br/>
-          Laboratorio de mayo: pedir agregar <strong>HbA1c</strong> a la orden que ya tenés.<br/>
-          Control cardiológico: <strong>junio 2026</strong>.
-        </div>
+        <div style={{fontSize:11,color:"#2e7d32",fontWeight:"700",marginBottom:4}}>💊 ROSUVASTATINA</div>
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.7}}><strong>5 mg/día</strong> siempre <strong>a la noche</strong>. Laboratorio mayo: pedir <strong>HbA1c</strong>. Control cardiológico: <strong>junio 2026</strong>.</div>
       </div>
     </div>}
-
-    {/* ── REGISTRO ── */}
     {seccion==="registro"&&<div>
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:6}}>FECHA</div>
         <input type="date" value={registroFecha} onChange={e=>setRegistroFecha(e.target.value)} style={{background:"#f5f6f8",border:"1px solid #e8eaed",borderRadius:10,padding:"11px 14px",color:"#1a1a1a",fontSize:14,width:"100%",outline:"none"}}/>
       </div>
-
       {saved&&<div style={{background:"#e8f5e9",border:"1px solid #2e7d3233",borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:"center",fontSize:13,color:"#2e7d32",fontWeight:"700"}}>✅ Guardado</div>}
-
-      {/* Registros del día */}
       {registrosHoy.length>0&&<div style={{background:"#fff",border:"1px solid #e8eaed",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
-        <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:10}}>LO QUE REGISTRASTE HOY</div>
+        <div style={{fontSize:10,color:"#777",fontWeight:"700",letterSpacing:1,marginBottom:10}}>LO REGISTRADO HOY</div>
         {registrosHoy.map((r,i)=><div key={r.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:i<registrosHoy.length-1?"1px solid #e8eaed":"none",alignItems:"flex-start"}}>
-          <span style={{fontSize:16,flexShrink:0}}>
-            {r.label.includes("Desayuno")?"☀️":r.label.includes("Mañana")?"☕":r.label.includes("Almuerzo")?"🍽️":r.label.includes("Pileta")?"🥤":r.label.includes("Cena")?"🌙":"📝"}
-          </span>
-          <div>
-            <div style={{fontSize:11,fontWeight:"700",color:"#555"}}>{r.label}</div>
-            <div style={{fontSize:12,color:"#1a1a1a",marginTop:2}}>{r.notes}</div>
-          </div>
+          <span style={{fontSize:16,flexShrink:0}}>{r.label.includes("Desayuno")?"☀️":r.label.includes("Mañana")?"☕":r.label.includes("Almuerzo")?"🍽️":r.label.includes("Pileta")?"🥤":r.label.includes("Cena")?"🌙":"📝"}</span>
+          <div><div style={{fontSize:11,fontWeight:"700",color:"#555"}}>{r.label}</div><div style={{fontSize:12,color:"#1a1a1a",marginTop:2}}>{r.notes}</div></div>
         </div>)}
       </div>}
-
-      {/* Formularios por momento */}
       {PLAN_DIA.map((p,i)=>{
         const key=p.momento;
         return <div key={i} style={{background:"#fff",border:"1px solid #e8eaed",borderLeft:"4px solid "+p.color,borderRadius:"0 12px 12px 0",padding:"12px 14px",marginBottom:10}}>
           <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
             <span style={{fontSize:16}}>{p.icono}</span>
-            <div>
-              <div style={{fontSize:13,fontWeight:"700"}}>{p.momento}</div>
-              <div style={{fontSize:10,color:p.color,fontWeight:"600"}}>{p.hora}</div>
-            </div>
+            <div><div style={{fontSize:13,fontWeight:"700"}}>{p.momento}</div><div style={{fontSize:10,color:p.color,fontWeight:"600"}}>{p.hora}</div></div>
           </div>
-          <textarea
-            value={registros[key]||""}
-            onChange={e=>setRegistros(r=>({...r,[key]:e.target.value}))}
+          <textarea value={registros[key]||""} onChange={e=>setRegistros(r=>({...r,[key]:e.target.value}))}
             style={{background:"#f5f6f8",border:"1px solid #e8eaed",borderRadius:8,padding:"10px 12px",color:"#1a1a1a",fontSize:13,width:"100%",outline:"none",resize:"none",height:60}}
-            placeholder={"Ej: "+p.opciones[0].slice(0,40)+"..."}
-          />
-          <button
-            onClick={()=>guardarRegistro(key,registros[key]||"")}
-            disabled={!registros[key]?.trim()}
-            style={{background:p.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,fontWeight:"700",cursor:"pointer",marginTop:8,opacity:!registros[key]?.trim()?0.4:1}}
-          >Guardar {p.icono}</button>
+            placeholder={"Ej: "+p.opciones[0].replace("🆕 ","").slice(0,45)+"..."}/>
+          <button onClick={()=>guardarRegistro(key,registros[key]||"")} disabled={!registros[key]?.trim()}
+            style={{background:p.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,fontWeight:"700",cursor:"pointer",marginTop:8,opacity:!registros[key]?.trim()?0.4:1}}>
+            Guardar {p.icono}
+          </button>
         </div>;
       })}
     </div>}
-
-    {/* ── ALIMENTOS CLAVE ── */}
     {seccion==="alimentos"&&<div>
       <div style={{background:"#e8f5e9",border:"1px solid #2e7d3233",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
         <div style={{fontSize:11,color:"#2e7d32",fontWeight:"700",marginBottom:4}}>🐟 OMEGA-3 — EL MÁS IMPORTANTE</div>
-        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.6}}>Atún, sardinas y chía son los tres que más van a bajar tus triglicéridos de 170. Tratar de incluir al menos uno de los tres en el almuerzo o la cena todos los días.</div>
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.6}}>Atún, sardinas y chía: al menos uno por día en almuerzo o cena para bajar triglicéridos de 170.</div>
       </div>
       {ALIMENTOS_CLAVE.map((a,i)=><div key={i} style={{background:i%2===0?"#f5f6f8":"#fff",border:"1px solid #e8eaed",borderRadius:10,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
-          <div style={{fontSize:13,fontWeight:"700",color:"#1a1a1a"}}>{a.nombre}</div>
-          <div style={{fontSize:11,color:"#777",marginTop:2}}>{a.nota}</div>
-        </div>
+        <div><div style={{fontSize:13,fontWeight:"700",color:"#1a1a1a"}}>{a.nombre}</div><div style={{fontSize:11,color:"#777",marginTop:2}}>{a.nota}</div></div>
         <div style={{background:"#e3f2fd",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#1565c0",fontWeight:"700",flexShrink:0,marginLeft:10,textAlign:"center"}}>{a.frec}</div>
       </div>)}
       <div style={{background:"#e0f2f1",border:"1px solid #00695c33",borderRadius:12,padding:"12px 14px",marginTop:4}}>
         <div style={{fontSize:11,color:"#00695c",fontWeight:"700",marginBottom:8}}>💧 HIDRATACIÓN</div>
-        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.7}}>
-          Objetivo: <strong>2 litros por día</strong>.<br/>
-          1 vaso grande al despertar antes del café.<br/>
-          Llegar a la pileta con 1 litro ya tomado.<br/>
-          Poco líquido durante la cena (evita reflujo).<br/>
-          Mate con cafeína: solo hasta las <strong>17:30 hs</strong>.
-        </div>
-      </div>
-      <div style={{background:"#fce4ec",border:"1px solid #c6285033",borderRadius:12,padding:"12px 14px",marginTop:10}}>
-        <div style={{fontSize:11,color:"#c62850",fontWeight:"700",marginBottom:8}}>🚫 REDUCIR EN LA CENA</div>
-        {["Fideos, arroz o polenta en cantidad grande","Frituras y queso derretido abundante","Carne con mucha grasa (costilla, asado de tira)",
-          "Pan en cantidad","Dulces y galletitas"].map((r,i)=><div key={i} style={{fontSize:12,padding:"4px 0",borderBottom:i<4?"1px solid #fce4ec":"none",color:"#1a1a1a"}}>✗ {r}</div>)}
+        <div style={{fontSize:12,color:"#1a1a1a",lineHeight:1.7}}>Objetivo: <strong>2 litros/día</strong>. 1 vaso al despertar. Llegar a la pileta con 1L ya tomado. Poco en la cena. Mate con cafeína solo hasta las <strong>17:30</strong>.</div>
       </div>
       <div style={{height:20}}/>
     </div>}
-
     <div style={{height:20}}/>
   </div>;
 }
 
-// ── APP ───────────────────────────────────────────────────────
 function App(){
   const [unlocked,setUnlocked] = useState(()=>!!sessionStorage.getItem("tl-ok"));
   const [tab,setTab] = useState("home");
